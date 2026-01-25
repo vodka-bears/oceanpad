@@ -1,0 +1,2 @@
+# boards/arm/oceanpad/oceanpad_defconfig
+CONFIG_BOARD_OCEANPAD=y

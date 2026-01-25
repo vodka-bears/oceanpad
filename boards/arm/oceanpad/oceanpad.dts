@@ -1,0 +1,213 @@
+/dts-v1/;
+#include <nordic/nrf52832_qfaa.dtsi>
+#include "oceanpad-pinctrl.dtsi"
+
+/ {
+    model = "OceanPad F710 Retrofit";
+    compatible = "oceanpad";
+
+    chosen {
+        zephyr,sram = &sram0;
+        zephyr,flash = &flash0;
+        zephyr,code-partition = &slot0_partition;
+        zephyr,console = &uart0;
+        zephyr,shell-uart = &uart0;
+        zephyr,settings-partition = &storage_partition;
+    };
+
+    /* Digital outputs (GPIO only) */
+    leds {
+        compatible = "gpio-leds";
+        status_led: led_0 {
+            gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
+            label = "Status LED";
+        };
+        axes_pwr: axes_pwr_en {
+            gpios = <&gpio0 8 GPIO_ACTIVE_HIGH>;
+            label = "Potentiometers Power Rail";
+        };
+    };
+
+    /* PWM Vibration Motors */
+    pwmleds {
+        compatible = "pwm-leds";
+        motor_big: motor_0 {
+            pwms = <&pwm0 0 PWM_USEC(50) PWM_POLARITY_NORMAL>;
+            label = "Heavy Vibration Motor";
+        };
+        motor_small: motor_1 {
+            pwms = <&pwm0 1 PWM_USEC(50) PWM_POLARITY_NORMAL>;
+            label = "Small Vibration Motor";
+        };
+    };
+
+    /* MCU wired buttons */
+    native_buttons {
+        compatible = "gpio-keys";
+        btn_lb: lb { gpios = <&gpio0 25 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>; label = "Left Bumper"; };
+        btn_rb: rb { gpios = <&gpio0 26 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>; label = "Right Bumper"; };
+        btn_start: start { gpios = <&gpio0 16 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>; label = "Start"; };
+        btn_back: back { gpios = <&gpio0 15 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>; label = "Back"; };
+        btn_home: home { gpios = <&gpio0 14 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>; label = "Home"; };
+        btn_ls: ls { gpios = <&gpio0 18 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>; label = "Left Stick Click"; };
+        btn_rs: rs { gpios = <&gpio0 17 (GPIO_PULL_DOWN | GPIO_ACTIVE_HIGH)>; label = "Right Stick Click"; };
+
+        /* Mode switch selector X/D */
+        mode_switch: sw {
+            gpios = <&gpio0 27 (GPIO_PULL_UP | GPIO_ACTIVE_HIGH)>;
+            label = "X-D Selector Switch";
+        };
+        expander_reset: exp_reset {
+            gpios = <&gpio0 13 GPIO_ACTIVE_LOW>; // Активный низкий уровень
+            label = "PI4IOE5V6416 Reset";
+        };
+    };
+
+    /* ADC channels mapping */
+    zephyr,user {
+        io-channels =
+            <&adc 0>, /* P0.29 - LSX (AIN5) */
+            <&adc 1>, /* P0.28 - LSY (AIN4) */
+            <&adc 2>, /* P0.31 - RSX (AIN7) */
+            <&adc 3>, /* P0.30 - RSY (AIN6) */
+            <&adc 4>, /* P0.03 - LT  (AIN1) */
+            <&adc 5>, /* P0.04 - RT  (AIN2) */
+            <&adc 6>; /* P0.05 - Battery (AIN3) */
+    };
+};
+
+/* Hardware Overrides */
+
+&reg {
+    regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;
+};
+
+&uicr {
+    nfct-pins-as-gpios;
+};
+
+&gpio0 {
+    status = "okay";
+};
+
+&gpiote {
+    status = "okay";
+};
+
+&pwm0 {
+    status = "okay";
+    pinctrl-0 = <&pwm0_default>;
+    pinctrl-1 = <&pwm0_sleep>;
+    pinctrl-names = "default", "sleep";
+};
+
+&adc {
+    status = "okay";
+    #address-cells = <1>;
+    #size-cells = <0>;
+
+    channel@0 {
+        reg = <0>;
+        zephyr,gain = "ADC_GAIN_1_4";
+        zephyr,reference = "ADC_REF_VDD_1_4";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,input-positive = <NRF_SAADC_AIN5>;
+        zephyr,resolution = <12>;
+    };
+
+    channel@1 {
+        reg = <1>;
+        zephyr,gain = "ADC_GAIN_1_4";
+        zephyr,reference = "ADC_REF_VDD_1_4";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,input-positive = <NRF_SAADC_AIN4>;
+        zephyr,resolution = <12>;
+    };
+
+    channel@2 {
+        reg = <2>;
+        zephyr,gain = "ADC_GAIN_1_4";
+        zephyr,reference = "ADC_REF_VDD_1_4";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,input-positive = <NRF_SAADC_AIN7>;
+        zephyr,resolution = <12>;
+    };
+
+    channel@3 {
+        reg = <3>;
+        zephyr,gain = "ADC_GAIN_1_4";
+        zephyr,reference = "ADC_REF_VDD_1_4";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,input-positive = <NRF_SAADC_AIN6>;
+        zephyr,resolution = <12>;
+    };
+
+    channel@4 {
+        reg = <4>;
+        zephyr,gain = "ADC_GAIN_1_4";
+        zephyr,reference = "ADC_REF_VDD_1_4";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,input-positive = <NRF_SAADC_AIN1>;
+        zephyr,resolution = <12>;
+    };
+
+    channel@5 {
+        reg = <5>;
+        zephyr,gain = "ADC_GAIN_1_4";
+        zephyr,reference = "ADC_REF_VDD_1_4";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,input-positive = <NRF_SAADC_AIN2>;
+        zephyr,resolution = <12>;
+    };
+
+    channel@6 {
+        reg = <6>;
+        zephyr,gain = "ADC_GAIN_1_3";
+        zephyr,reference = "ADC_REF_INTERNAL";
+        zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+        zephyr,input-positive = <NRF_SAADC_AIN3>;
+        zephyr,resolution = <12>;
+    };
+};
+
+&i2c0 {
+    compatible = "nordic,nrf-twim";
+    status = "okay";
+    pinctrl-0 = <&i2c0_default>;
+    pinctrl-1 = <&i2c0_sleep>;
+    pinctrl-names = "default", "sleep";
+    clock-frequency = <I2C_BITRATE_FAST>;
+
+    expander: pi4ioe5v6416@20 {
+        compatible = "i2c-device";
+        reg = <0x20>;
+    };
+
+    imu: icm42688@68 {
+        compatible = "i2c-device";
+        reg = <0x68>;
+    };
+};
+
+&uart0 {
+    compatible = "nordic,nrf-uarte";
+    status = "okay";
+    current-speed = <115200>;
+    pinctrl-0 = <&uart0_default>;
+    pinctrl-1 = <&uart0_sleep>;
+    pinctrl-names = "default", "sleep";
+};
+
+&flash0 {
+    partitions {
+        compatible = "fixed-partitions";
+        #address-cells = <1>;
+        #size-cells = <1>;
+
+        boot_partition: partition@0 { label = "mcuboot"; reg = <0x00000000 0xc000>; };
+        slot0_partition: partition@c000 { label = "image-0"; reg = <0x0000c000 0x32000>; };
+        slot1_partition: partition@3e000 { label = "image-1"; reg = <0x0003e000 0x32000>; };
+        scratch_partition: partition@70000 { label = "image-scratch"; reg = <0x00070000 0xa000>; };
+        storage_partition: partition@7a000 { label = "storage"; reg = <0x0007a000 0x00006000>; };
+    };
+};

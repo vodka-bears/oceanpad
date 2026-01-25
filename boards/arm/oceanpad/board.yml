@@ -1,0 +1,6 @@
+board:
+  name: oceanpad
+  vendor: custom
+  full_name: OceanPad Controller
+  socs:
+    - name: nrf52832

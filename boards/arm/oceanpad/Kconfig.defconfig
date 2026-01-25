@@ -1,0 +1,7 @@
+ 
+if BOARD_OCEANPAD
+
+config BOARD
+	default "oceanpad"
+
+endif

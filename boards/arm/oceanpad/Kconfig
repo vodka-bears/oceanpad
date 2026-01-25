@@ -1,0 +1,6 @@
+# boards/arm/oceanpad/Kconfig
+
+config BOARD_OCEANPAD
+    bool "OceanPad Board"
+    select SOC_NRF52832_QFAA
+

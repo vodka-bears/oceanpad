@@ -1,0 +1,13 @@
+.cache/
+.west/
+.venv/
+
+__pycache__/
+*.pyc
+
+bootloader/
+build/
+modules/
+tools/
+zephyr/
+
