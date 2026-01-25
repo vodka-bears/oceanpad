@@ -121,6 +121,8 @@ private:
 
     static uint8_t current_bt_id;
 
+    static bt_gatt_exchange_params exchange_params;
+
     static DisConfig saved_dis;
 
     static struct bt_gatt_attr dis_attrs[20];

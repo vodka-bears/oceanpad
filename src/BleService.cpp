@@ -12,6 +12,8 @@ static const uint8_t hid_info[4] = { 0x01, 0x01, 0x00, 0x01 };
 
 uint8_t BleService::current_bt_id = 0;
 
+bt_gatt_exchange_params BleService::exchange_params;
+
 DisConfig BleService::saved_dis;
 
 struct bt_gatt_attr BleService::dis_attrs[20];
@@ -174,15 +176,26 @@ int BleService::init(const DeviceInfo* device_info, const DisConfig* dis, const 
                 LOG_ERR("Connection failed (err %u)", err);
                 return;
             }
-
             bt_conn_ref(conn);
+            exchange_params = {
+                [](struct bt_conn *conn, uint8_t err, struct bt_gatt_exchange_params *params)  {
+                    LOG_DBG("MTU exchange %s ", err == 0 ? "successful" : "failed");
+                    LOG_DBG("MTU size is: %d", bt_gatt_get_mtu(conn));
+                },
+            };
+            LOG_DBG("MTU size is: %d", bt_gatt_get_mtu(conn));
+            err = bt_gatt_exchange_mtu(conn, &exchange_params);
+            if (err) {
+                LOG_ERR("MTU exchange failed (err %d)", err);
+            } else {
+                LOG_DBG("MTU exchange pending");
+            }
             LOG_DBG("Connected (ref captured). Waiting for security...");
         },
 
         .disconnected = [](struct bt_conn *conn, uint8_t reason) {
             LOG_DBG("Disconnected (reason %u)", reason);
 
-            // Если это было наше активное соединение
             if (current_conn == conn) {
                 bt_conn_unref(current_conn);
                 current_conn = nullptr;
@@ -209,7 +222,6 @@ int BleService::init(const DeviceInfo* device_info, const DisConfig* dis, const 
             LOG_DBG("Security changed: level %u", level);
 
             if (level >= BT_SECURITY_L2) {
-                // Если уже есть кто-то другой — выгоняем старого
                 if (current_conn != nullptr && current_conn != conn) {
                     LOG_DBG("Replacing old connection with new bonded peer");
                     bt_conn_disconnect(current_conn, BT_HCI_ERR_REMOTE_USER_TERM_CONN);
@@ -246,19 +258,15 @@ int BleService::init(const DeviceInfo* device_info, const DisConfig* dis, const 
 }
 
 int BleService::set_identity(uint8_t bt_id) {
-    // --- Логика управления MAC адресом через Identity ---
     current_bt_id = bt_id;
     if (current_bt_id > 0) {
         bt_addr_le_t base_addr;
         size_t count = 1;
 
-        // Получаем адрес по умолчанию (Identity 0)
         bt_id_get(&base_addr, &count);
 
         LOG_HEXDUMP_DBG(base_addr.a.val, 6, "Current mac: ");
 
-        // Увеличиваем MAC на значение bt_id
-        // Простая арифметика для младшего байта (Little Endian)
         uint32_t carry = current_bt_id;
         for (int i = 0; i < 6; i++) {
             uint32_t val = base_addr.a.val[i] + carry;
@@ -447,7 +455,6 @@ int BleService::start_advertising_discoverable() {
     ad_discoverable[2].data_len = sizeof(uuids);
     ad_discoverable[2].data = uuids;
 
-    // Scan Response (Имя)
     const char* name = bt_get_name();
     sd[0].type = BT_DATA_NAME_COMPLETE;
     sd[0].data_len = (uint8_t)strlen(name);
