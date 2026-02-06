@@ -7,7 +7,7 @@ project(oceanpad)
 target_include_directories(app PRIVATE include)
 
 # 2. Automatically find all .cpp files in the src directory
-file(GLOB app_sources src/*.cpp)
+file(GLOB_RECURSE app_sources src/*.cpp)
 
 # 3. Add all found files to the build
 target_sources(app PRIVATE ${app_sources})

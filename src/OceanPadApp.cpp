@@ -184,11 +184,14 @@ void OceanPadApp::system_thread_fn(void *arg1, void *arg2, void *arg3) {
 }
 
 void OceanPadApp::input_loop() {
+    /*
     hw.update_phys();
     if (xd_switch_was_on)
     {
         hw.update_imu();
     }
+    */
+    hw.update();
     if (!hw.is_calibration()) {
         GamepadState gp_state = hw.get_state_copy();
         if (!is_state_idle(gp_state))

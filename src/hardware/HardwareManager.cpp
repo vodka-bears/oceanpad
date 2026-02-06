@@ -1,40 +1,11 @@
-#include "HardwareManager.hpp"
+#include "hardware/HardwareManager.hpp"
 #include <zephyr/logging/log.h>
 #include <hal/nrf_saadc.h>
 #include <zephyr/sys/reboot.h>
 #include <hal/nrf_power.h>
 
-/* PI4IOE5V6416 I2C Address and Registers */
-#define EXP_ADDR 0x20
-#define REG_INPUT_P0    0x00
-#define REG_INPUT_P1    0x01
-#define REG_PUD_EN0     0x46
-#define REG_PUD_EN1     0x47
-#define REG_PUD_SEL0    0x48
-#define REG_PUD_SEL1    0x49
 
-
-#define IMU_ADDR                0x68
-
-#define REG_DEVICE_CONFIG       0x11
-#define REG_PWR_MGMT0           0x4E
-#define REG_GYRO_CONFIG0        0x4F
-#define REG_ACCEL_CONFIG0       0x50
-#define REG_WHO_AM_I            0x75
-#define REG_ACCEL_DATA_X1       0x1F
-#define REG_PWR_MGMT0           0x4E
-
-
-#define BIT_SOFT_RESET          0x01
-#define WHO_AM_I_EXPECTED       0x47
-#define PWR_LN_ALL_ON           0x0F
-#define PWR_MODE_SLEEP          0x00
-
-#define IMU_GYRO_2000DPS_1KHZ   0x06
-#define IMU_ACCEL_8G_1KHZ       0x26
-
-
-LOG_MODULE_REGISTER(Hardware, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(HardwareManager, LOG_LEVEL_INF);
 
 HardwareManager* HardwareManager::instance = nullptr;
 
@@ -60,53 +31,10 @@ HardwareManager::HardwareManager() {
 }
 
 int HardwareManager::init() {
-    if (!device_is_ready(i2c_bus) || !device_is_ready(adc_dev)) {
-        LOG_ERR("Essential hardware devices not ready");
-        return -ENODEV;
-    }
-
-    const gpio_dt_spec* btns[] = {
-        &native_pins.lb, &native_pins.rb, &native_pins.ls, &native_pins.rs,
-        &native_pins.start, &native_pins.back, &native_pins.home, &xd_switch
-    };
-
-    for (const gpio_dt_spec* btn : btns) {
-        if (!gpio_is_ready_dt(btn)) return -ENODEV;
-        gpio_pin_configure_dt(btn, GPIO_INPUT);
-    }
-
-    gpio_pin_configure_dt(&xd_switch, GPIO_INPUT);
-    gpio_pin_configure_dt(&exp_reset, GPIO_INPUT);
-
-    if (!device_is_ready(i2c_bus)) return -ENODEV;
-    setup_expander();
-
-
-    if (!device_is_ready(adc_dev)) return -ENODEV;
-
-
-    const adc_dt_spec* chans[] = {
-        &axes_channels.lx, &axes_channels.ly, &axes_channels.rx, &axes_channels.ry,
-        &axes_channels.lt, &axes_channels.rt, &axes_channels.vbat
-    };
-
-    for (const adc_dt_spec*  chan : chans) {
-         if (!device_is_ready(chan->dev)) {
-            LOG_ERR("ADC device not ready");
-            return -ENODEV;
-        }
-
-        int ret = adc_channel_setup_dt(chan);
-        if (ret < 0) {
-            LOG_ERR("Failed to setup channel,  err %d", ret);
-            return ret;
-        }
-    }
-
-
-    if (!gpio_is_ready_dt(&axes_pwr) || !gpio_is_ready_dt(&status_led)) {
-        LOG_ERR("GPIO out not init!");
-        return -ENODEV;
+    int err = adc_channel_setup_dt(&vbat);
+    if (err < 0) {
+        LOG_ERR("Failed to setup channel,  err %d", err);
+        return err;
     }
 
     gpio_pin_configure_dt(&axes_pwr, GPIO_OUTPUT_ACTIVE);
@@ -119,19 +47,35 @@ int HardwareManager::init() {
         LOG_ERR("Motor PWM not init!");
         return -ENODEV;
     }
-
-    update_native_buttons();
+    raw_data_reader.init();
+    err = raw_data_reader.getRawData(raw_data);
     k_mutex_lock(&data_mutex, K_FOREVER);
     copy_native_buttons();
     k_mutex_unlock(&data_mutex);
-    if (input_state.buttons.switch_xd)
-    {
-        setup_imu();
-    }
     settings_register(&input_conf);
     return 0;
 }
 
+int HardwareManager::update() {
+    int ret = raw_data_reader.getRawData(raw_data);
+    if (ret) {
+        return ret;
+    }
+    if (is_calibration()) {
+        calibration_routine();
+        return 0;
+    }
+    k_mutex_lock(&data_mutex, K_FOREVER);
+    copy_expander();
+    copy_native_buttons();
+    copy_analog();
+    if (raw_data.native_buttons.xd_switch) {
+        input_state.imu_data = raw_data.raw_imu; //for now
+    }
+    k_mutex_unlock(&data_mutex);
+    return 0;
+}
+/*
 void HardwareManager::update_phys() {
     update_expander();
     update_native_buttons();
@@ -163,6 +107,7 @@ void HardwareManager::update_imu() {
     input_state.imu_data = raw_data.raw_imu; //for now
     k_mutex_unlock(&data_mutex);
 }
+*/
 
 GamepadState HardwareManager::get_state_copy() {
     GamepadState ret;
@@ -217,7 +162,7 @@ uint8_t HardwareManager::get_battery_percent() {
 
     int32_t batt_mv_unscaled = vbat_raw;
 
-    adc_raw_to_millivolts_dt(&axes_channels.vbat, &batt_mv_unscaled);
+    adc_raw_to_millivolts_dt(&vbat, &batt_mv_unscaled);
 
     LOG_DBG("Vbat mV unscaled: %u", batt_mv_unscaled);
 
@@ -250,9 +195,13 @@ bool HardwareManager::is_calibration() {
 }
 
 void HardwareManager::restart() {
-    if (i2c_reg_write_byte(i2c_bus, IMU_ADDR, REG_PWR_MGMT0, PWR_MODE_SLEEP) != 0) {
-        LOG_WRN("IMU: Failed to set sleep mode");
-    } //in case we won't need the imu after restart
+    //if (i2c_reg_write_byte(i2c_bus, IMU_ADDR, REG_PWR_MGMT0, PWR_MODE_SLEEP) != 0) {
+    //    LOG_WRN("IMU: Failed to set sleep mode");
+    //} //in case we won't need the imu after restart
+    int err = raw_data_reader.deinit();
+    if (err) {
+        LOG_ERR("RawDataReader deinit failed, err: %d", err);
+    }
     LOG_DBG("Restarting");
     k_msleep(100);
     sys_reboot(SYS_REBOOT_COLD);
@@ -260,13 +209,17 @@ void HardwareManager::restart() {
 
 void HardwareManager::sleep() {
     set_led(false);
-    if (i2c_reg_write_byte(i2c_bus, IMU_ADDR, REG_PWR_MGMT0, PWR_MODE_SLEEP) != 0) {
-        LOG_WRN("IMU: Failed to set sleep mode");
-    }
+    //if (i2c_reg_write_byte(i2c_bus, IMU_ADDR, REG_PWR_MGMT0, PWR_MODE_SLEEP) != 0) {
+    //    LOG_WRN("IMU: Failed to set sleep mode");
+    //}
     gpio_pin_set_dt(&axes_pwr, 0);
-    gpio_pin_configure_dt(&xd_switch, GPIO_DISCONNECTED);
-    gpio_pin_set_dt(&exp_reset, 1); //prob stays latched
-    gpio_pin_interrupt_configure_dt(&native_pins.home, GPIO_INT_LEVEL_ACTIVE);
+    //gpio_pin_configure_dt(&xd_switch, GPIO_DISCONNECTED);
+    //gpio_pin_set_dt(&exp_reset, 1); //prob stays latched
+    //gpio_pin_interrupt_configure_dt(&native_pins.home, GPIO_INT_LEVEL_ACTIVE);
+    int err = raw_data_reader.deinit();
+    if (err) {
+        LOG_ERR("RawDataReader deinit failed, err: %d", err);
+    }
     LOG_DBG("Going to sleep");
     k_msleep(100);
     nrf_power_system_off(NRF_POWER);
@@ -308,12 +261,13 @@ void HardwareManager::debug_print_raw() {
     );
 }
 
+/*
 int HardwareManager::setup_expander() {
-    /* Enable Pull-up/down resistors */
+    // Enable Pull-up/down resistors
     i2c_reg_write_byte(i2c_bus, EXP_ADDR, REG_PUD_EN0, 0xFF);
     i2c_reg_write_byte(i2c_bus, EXP_ADDR, REG_PUD_EN1, 0xFF);
 
-    /* Select Pull-DOWN (0x00) for all pins */
+    // Select Pull-DOWN (0x00) for all pins
     i2c_reg_write_byte(i2c_bus, EXP_ADDR, REG_PUD_SEL0, 0x00);
     i2c_reg_write_byte(i2c_bus, EXP_ADDR, REG_PUD_SEL1, 0x00);
 
@@ -379,6 +333,8 @@ void HardwareManager::update_analog() {
     adc_read(adc_dev, &seq);
 }
 
+*/
+
 void HardwareManager::copy_expander() {
     if (data_mutex.owner != k_current_get())
     {
@@ -417,7 +373,7 @@ void HardwareManager::copy_native_buttons() {
     input_state.buttons.back = raw_data.native_buttons.back;
     input_state.buttons.home = raw_data.native_buttons.home;
 
-    input_state.buttons.switch_xd = raw_data.native_buttons.switch_xd;
+    input_state.buttons.switch_xd = raw_data.native_buttons.xd_switch;
 }
 
 void HardwareManager::copy_analog() {

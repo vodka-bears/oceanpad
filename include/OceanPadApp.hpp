@@ -1,5 +1,5 @@
 #pragma once
-#include "HardwareManager.hpp"
+#include "hardware/HardwareManager.hpp"
 #include "ReportCodecXbox.hpp"
 #include "ReportCodec8BitDo.hpp"
 #include "BleService.hpp"
