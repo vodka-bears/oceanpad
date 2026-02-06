@@ -55,7 +55,6 @@ private:
     static constexpr struct gpio_dt_spec axes_pwr = GPIO_DT_SPEC_GET(DT_NODELABEL(axes_pwr), gpios);
     static constexpr struct gpio_dt_spec status_led = GPIO_DT_SPEC_GET(DT_NODELABEL(status_led), gpios);
 
-
     static constexpr adc_dt_spec vbat = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 6);
 
     struct k_mutex data_mutex;
@@ -66,14 +65,11 @@ private:
 
     RawData raw_data;
 
-    AnalogAxes axes;
-
     CalibData calib_data;
 
     CalibState calib_state;
 
     /* Device handles */
-    const struct device* i2c_bus;
     const struct device* adc_dev;
 
     static inline const uint8_t MIN_MOTOR_PERCENT = 50;

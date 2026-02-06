@@ -18,7 +18,6 @@ HardwareManager::HardwareManager() {
     instance = this;
     k_mutex_init(&data_mutex);
     memset(&input_state, 0, sizeof(input_state));
-    i2c_bus = DEVICE_DT_GET(DT_NODELABEL(i2c0));
     adc_dev = DEVICE_DT_GET(DT_NODELABEL(adc));
     // Default values
 
@@ -75,39 +74,6 @@ int HardwareManager::update() {
     k_mutex_unlock(&data_mutex);
     return 0;
 }
-/*
-void HardwareManager::update_phys() {
-    update_expander();
-    update_native_buttons();
-    update_analog();
-    if (is_calibration()) {
-        calibration_routine();
-        return;
-    }
-    k_mutex_lock(&data_mutex, K_FOREVER);
-    copy_expander();
-    copy_native_buttons();
-    copy_analog();
-    k_mutex_unlock(&data_mutex);
-}
-
-void HardwareManager::update_imu() {
-    uint8_t raw[12];
-
-    if (i2c_burst_read(i2c_bus, IMU_ADDR, REG_ACCEL_DATA_X1, raw, 12) == 0) {
-        raw_data.raw_imu.accel[0] = (int16_t)((raw[0] << 8) | raw[1]);
-        raw_data.raw_imu.accel[1] = (int16_t)((raw[2] << 8) | raw[3]);
-        raw_data.raw_imu.accel[2] = (int16_t)((raw[4] << 8) | raw[5]);
-
-        raw_data.raw_imu.gyro[0] = (int16_t)((raw[6] << 8) | raw[7]);
-        raw_data.raw_imu.gyro[1] = (int16_t)((raw[8] << 8) | raw[9]);
-        raw_data.raw_imu.gyro[2] = (int16_t)((raw[10] << 8) | raw[11]);
-    }
-    k_mutex_lock(&data_mutex, K_FOREVER);
-    input_state.imu_data = raw_data.raw_imu; //for now
-    k_mutex_unlock(&data_mutex);
-}
-*/
 
 GamepadState HardwareManager::get_state_copy() {
     GamepadState ret;
@@ -195,9 +161,6 @@ bool HardwareManager::is_calibration() {
 }
 
 void HardwareManager::restart() {
-    //if (i2c_reg_write_byte(i2c_bus, IMU_ADDR, REG_PWR_MGMT0, PWR_MODE_SLEEP) != 0) {
-    //    LOG_WRN("IMU: Failed to set sleep mode");
-    //} //in case we won't need the imu after restart
     int err = raw_data_reader.deinit();
     if (err) {
         LOG_ERR("RawDataReader deinit failed, err: %d", err);
@@ -209,13 +172,7 @@ void HardwareManager::restart() {
 
 void HardwareManager::sleep() {
     set_led(false);
-    //if (i2c_reg_write_byte(i2c_bus, IMU_ADDR, REG_PWR_MGMT0, PWR_MODE_SLEEP) != 0) {
-    //    LOG_WRN("IMU: Failed to set sleep mode");
-    //}
     gpio_pin_set_dt(&axes_pwr, 0);
-    //gpio_pin_configure_dt(&xd_switch, GPIO_DISCONNECTED);
-    //gpio_pin_set_dt(&exp_reset, 1); //prob stays latched
-    //gpio_pin_interrupt_configure_dt(&native_pins.home, GPIO_INT_LEVEL_ACTIVE);
     int err = raw_data_reader.deinit();
     if (err) {
         LOG_ERR("RawDataReader deinit failed, err: %d", err);
@@ -260,80 +217,6 @@ void HardwareManager::debug_print_raw() {
         raw_data.raw_axes.raw_lt, raw_data.raw_axes.raw_rt
     );
 }
-
-/*
-int HardwareManager::setup_expander() {
-    // Enable Pull-up/down resistors
-    i2c_reg_write_byte(i2c_bus, EXP_ADDR, REG_PUD_EN0, 0xFF);
-    i2c_reg_write_byte(i2c_bus, EXP_ADDR, REG_PUD_EN1, 0xFF);
-
-    // Select Pull-DOWN (0x00) for all pins
-    i2c_reg_write_byte(i2c_bus, EXP_ADDR, REG_PUD_SEL0, 0x00);
-    i2c_reg_write_byte(i2c_bus, EXP_ADDR, REG_PUD_SEL1, 0x00);
-
-    return 0;
-}
-
-int HardwareManager::setup_imu() {
-    uint8_t chip_id = 0;
-
-    if (i2c_reg_read_byte(i2c_bus, IMU_ADDR, REG_WHO_AM_I, &chip_id) != 0) {
-        LOG_ERR("IMU: I2C read failed (WhoAmI)");
-        return false;
-    }
-
-    if (chip_id != WHO_AM_I_EXPECTED) {
-        LOG_ERR("IMU: Wrong chip ID: 0x%02X (Expected 0x47)", chip_id);
-        return false;
-    }
-
-    i2c_reg_write_byte(i2c_bus, IMU_ADDR, REG_DEVICE_CONFIG, BIT_SOFT_RESET);
-    k_msleep(2);
-
-    i2c_reg_write_byte(i2c_bus, IMU_ADDR, REG_PWR_MGMT0, PWR_LN_ALL_ON);
-
-    k_msleep(30);
-
-    i2c_reg_write_byte(i2c_bus, IMU_ADDR, REG_GYRO_CONFIG0, IMU_GYRO_2000DPS_1KHZ);
-
-    i2c_reg_write_byte(i2c_bus, IMU_ADDR, REG_ACCEL_CONFIG0, IMU_ACCEL_8G_1KHZ);
-
-    LOG_INF("IMU: Configured for 2000dps, 8G @ 1kHz");
-    return 0;
-}
-
-void HardwareManager::update_expander() {
-    if (i2c_burst_read(i2c_bus, EXP_ADDR, REG_INPUT_P0, reinterpret_cast<uint8_t*>(&raw_data.expander_buttons), 2) < 0) {
-        LOG_WRN("Expander read failed");
-        return;
-    }
-}
-
-void HardwareManager::update_native_buttons() {
-    raw_data.native_buttons.lb = gpio_pin_get_dt(&native_pins.lb);
-    raw_data.native_buttons.rb = gpio_pin_get_dt(&native_pins.rb);
-
-    raw_data.native_buttons.ls = gpio_pin_get_dt(&native_pins.ls);
-    raw_data.native_buttons.rs = gpio_pin_get_dt(&native_pins.rs);
-
-    raw_data.native_buttons.start = gpio_pin_get_dt(&native_pins.start);
-    raw_data.native_buttons.back = gpio_pin_get_dt(&native_pins.back);
-    raw_data.native_buttons.home = gpio_pin_get_dt(&native_pins.home);
-
-    raw_data.native_buttons.switch_xd = gpio_pin_get_dt(&xd_switch);
-}
-
-void HardwareManager::update_analog() {
-    struct adc_sequence seq = {
-        .channels       = 0b00111111,
-        .buffer         = &raw_data.raw_axes,
-        .buffer_size    = sizeof(raw_data.raw_axes),
-        .resolution     = 12,
-    };
-    adc_read(adc_dev, &seq);
-}
-
-*/
 
 void HardwareManager::copy_expander() {
     if (data_mutex.owner != k_current_get())

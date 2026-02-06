@@ -21,7 +21,7 @@ int ExpanderButtonsReader::init() {
 
     int err = 0;
 
-    err = gpio_pin_configure_dt(&exp_reset, GPIO_INPUT);
+    err = gpio_pin_configure_dt(&exp_reset, GPIO_OUTPUT_ACTIVE);
     if (err) {
         return err;
     }
