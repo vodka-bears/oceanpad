@@ -18,7 +18,6 @@ HardwareManager::HardwareManager() {
     instance = this;
     k_mutex_init(&data_mutex);
     memset(&input_state, 0, sizeof(input_state));
-    adc_dev = DEVICE_DT_GET(DT_NODELABEL(adc));
     // Default values
 
     calib_data.lx.center = calib_data.ly.center = calib_data.rx.center = calib_data.ry.center = 1800;
@@ -30,17 +29,14 @@ HardwareManager::HardwareManager() {
 }
 
 int HardwareManager::init() {
-    int err = adc_channel_setup_dt(&vbat);
+    int err = battery_gauge.init();
     if (err < 0) {
-        LOG_ERR("Failed to setup channel,  err %d", err);
+        LOG_ERR("Failed to init battery_gauge,  err %d", err);
         return err;
     }
 
     gpio_pin_configure_dt(&axes_pwr, GPIO_OUTPUT_ACTIVE);
-    //gpio_pin_configure_dt(&status_led, GPIO_OUTPUT_ACTIVE);
-
     gpio_pin_set_dt(&axes_pwr, 1);
-    //gpio_pin_set_dt(&status_led, 0);
 
     if (!pwm_is_ready_dt(&motor_big) || !pwm_is_ready_dt(&motor_small)) {
         LOG_ERR("Motor PWM not init!");
@@ -55,7 +51,7 @@ int HardwareManager::init() {
     err = led_blinker.init();
     if (err)
     {
-        LOG_ERR("Failed to setup led flasherr,  err %d", err);
+        LOG_ERR("Failed to setup led blinker,  err %d", err);
         return err;
     }
     err = raw_input_reader.getRawData(raw_data);
@@ -132,47 +128,8 @@ void HardwareManager::set_led(const LedPwmParams& led_params) {
 }
 
 uint8_t HardwareManager::get_battery_percent() {
-    uint16_t vbat_raw;
-    struct adc_sequence seq = {
-        .channels    = BIT(6),
-        .buffer      = &vbat_raw,
-        .buffer_size = sizeof(vbat_raw),
-        .resolution  = 12,
-        .oversampling = 4,
-    };
-
-    int err = adc_read(adc_dev, &seq);
-    if (err) {
-        LOG_ERR("ADC vbat read err: %d", err);
-        return 0;
-    }
-
-    LOG_DBG("Vbat raw: %u", vbat_raw);
-
-    int32_t batt_mv_unscaled = vbat_raw;
-
-    adc_raw_to_millivolts_dt(&vbat, &batt_mv_unscaled);
-
-    LOG_DBG("Vbat mV unscaled: %u", batt_mv_unscaled);
-
-    uint32_t batt_mv_scaled = VBAT_SCALE_MUL * batt_mv_unscaled / VBAT_SCALE_DIV;
-
-    LOG_DBG("Vbat mV scaled: %u", batt_mv_scaled);
-
-    uint32_t batt_percent;
-
-    if (batt_mv_scaled < BAT_MV_0) {
-        batt_percent = 0;
-    } else if (batt_mv_scaled > BAT_MV_100) {
-        batt_percent = 100;
-    } else {
-        batt_percent = 100 * (batt_mv_scaled - BAT_MV_0) / (BAT_MV_100 - BAT_MV_0);
-    }
-
-    LOG_DBG("Batt %%: %u", batt_percent);
-
-    input_state.battery_percent = batt_percent;
-    return (uint8_t) batt_percent;
+    input_state.battery_percent = battery_gauge.get_battery_percent();;
+    return input_state.battery_percent;
 }
 
 void HardwareManager::start_calibration() {

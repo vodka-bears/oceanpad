@@ -3,13 +3,13 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/i2c.h>
-#include <zephyr/drivers/adc.h>
 #include <zephyr/drivers/pwm.h>
 #include <zephyr/settings/settings.h>
 
 #include "GamepadState.hpp"
 #include "HardwareManager/RawInputReader/RawInputReader.hpp"
 #include "HardwareManager/LedBlinker.hpp"
+#include "HardwareManager/BatteryGauge.hpp"
 
 class HardwareManager {
 public:
@@ -54,9 +54,9 @@ private:
 
     static constexpr struct gpio_dt_spec axes_pwr = GPIO_DT_SPEC_GET(DT_NODELABEL(axes_pwr), gpios);
 
-    static constexpr adc_dt_spec vbat = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 6);
-
     struct k_mutex data_mutex;
+
+    BatteryGauge battery_gauge;
 
     RawInputReader raw_input_reader;
 
@@ -71,17 +71,9 @@ private:
 
     CalibState calib_state;
 
-    /* Device handles */
-    const struct device* adc_dev;
-
     static inline const uint8_t MIN_MOTOR_PERCENT = 50;
     static inline const uint16_t CENTER_DEADZONE = 65;
     static inline const uint16_t EDGE_DEADZONE = 40;
-
-    static inline const uint32_t VBAT_SCALE_MUL = 201;
-    static inline const uint32_t VBAT_SCALE_DIV = 100;
-    static inline const uint32_t BAT_MV_100 = 2900;
-    static inline const uint32_t BAT_MV_0 = 2200;
 
     static HardwareManager* instance;
 };
