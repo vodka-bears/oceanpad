@@ -1,7 +1,7 @@
-#include <string.h>
-#include "ReportCodecXbox.hpp"
-#include "GamepadState.hpp"
 #include <zephyr/logging/log.h>
+
+#include "GamepadState.hpp"
+#include "ReportCodec/ReportCodecXbox.hpp"
 
 LOG_MODULE_REGISTER(ReportCodecXbox, LOG_LEVEL_WRN);
 

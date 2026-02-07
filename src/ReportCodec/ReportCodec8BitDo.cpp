@@ -1,9 +1,10 @@
 #include <string.h>
-#include "ReportCodec8BitDo.hpp"
-#include "GamepadState.hpp"
 #include <zephyr/logging/log.h>
 
-LOG_MODULE_REGISTER(ReportCodec8BitDo, LOG_LEVEL_DBG);
+#include "GamepadState.hpp"
+#include "ReportCodec/ReportCodec8BitDo.hpp"
+
+LOG_MODULE_REGISTER(ReportCodec8BitDo, LOG_LEVEL_WRN);
 
 uint8_t ReportCodec8BitDo::encode_input(uint8_t report_id, const GamepadState& data, uint8_t* report_buffer, uint16_t report_len) const {
     if (report_id != 1) {

@@ -1,7 +1,7 @@
 #pragma once
 #include "HardwareManager/HardwareManager.hpp"
-#include "ReportCodecXbox.hpp"
-#include "ReportCodec8BitDo.hpp"
+#include "ReportCodec/ReportCodecXbox.hpp"
+#include "ReportCodec/ReportCodec8BitDo.hpp"
 #include "BleService.hpp"
 
 class OceanPadApp {
