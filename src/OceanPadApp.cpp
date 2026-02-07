@@ -33,7 +33,9 @@ void OceanPadApp::run() {
         LOG_ERR("Error hardware init");
     }
 
-    xd_switch_was_on = hw.get_state_copy().buttons.switch_xd;
+
+    hw.get_state(gamepad_state);
+    xd_switch_was_on = gamepad_state.buttons.xd_switch;
 
     LOG_DBG("X-D switch is %s", xd_switch_was_on ? "on" : "off");
 
@@ -118,9 +120,9 @@ void OceanPadApp::run() {
     }
     ble_service.set_output_report_callback(vibration_callback_wrapper);
     ble_service.set_status_callbacks(
-        []() { g_app_instance->hw.set_led(true); },
+        []() { g_app_instance->hw.set_led(LedPattern::Connected); },
         []() { g_app_instance->hw.sleep(); },
-        []() { g_app_instance->start_advertising(); },
+        []() { /*g_app_instance->start_advertising();*/ },
         []() { g_app_instance->on_advertising_discoverable_timeout(); },
         []() { g_app_instance->hw.sleep(); }
     );
@@ -189,13 +191,13 @@ void OceanPadApp::system_thread_fn(void *arg1, void *arg2, void *arg3) {
 void OceanPadApp::input_loop() {
     hw.update();
     if (!hw.is_calibration()) {
-        GamepadState gp_state = hw.get_state_copy();
-        if (!is_state_idle(gp_state))
+        hw.get_state(gamepad_state);
+        if (!is_state_idle(gamepad_state))
         {
             last_non_idle_time = k_uptime_get();
         }
         uint8_t input_report[34];
-        uint8_t report_len = current_codec->encode_input(1, gp_state, input_report, sizeof(input_report));
+        uint8_t report_len = current_codec->encode_input(1, gamepad_state, input_report, sizeof(input_report));
 
         if (ble_service.get_state() >= BleServiceState::Connected)
         {
@@ -205,8 +207,8 @@ void OceanPadApp::input_loop() {
 }
 
 void OceanPadApp::system_loop() {
-    GamepadState gp_state = hw.get_state_copy();
-    handle_system_logic(gp_state);
+    hw.get_state(gamepad_state);
+    handle_system_logic();
     int64_t current_time = k_uptime_get();
     if (current_time > next_battery_update_time)
     {
@@ -218,29 +220,29 @@ void OceanPadApp::system_loop() {
         LOG_DBG("Idle timeout, shutting down");
         hw.sleep();
     }
-    if (gp_state.buttons.switch_xd != xd_switch_was_on)
+    if (gamepad_state.buttons.xd_switch != xd_switch_was_on)
     {
         LOG_DBG("X-D Switch flipped, restarting");
         hw.restart();
     }
 }
 
-void OceanPadApp::handle_system_logic(const GamepadState& gp_state) {
-    if (gp_state.buttons.mode) {
+void OceanPadApp::handle_system_logic() {
+    if (gamepad_state.buttons.mode) {
         if (system_press_start == 0) {
             system_press_start = k_uptime_get();
         } else if (system_press_start > 0 && (k_uptime_get() - system_press_start >= LONG_PRESS_TIMEOUT_MS)) {
-            if (gp_state.buttons.b) {
+            if (gamepad_state.buttons.b) {
                 LOG_DBG("System+B: Calibration Mode Initialized");
                 hw.start_calibration();
-            } else if (gp_state.buttons.y) {
+            } else if (gamepad_state.buttons.y) {
                 LOG_DBG("System+Y: Clearing bonded peers");
                 ble_service.clear_bonded_peers();
                 hw.restart();
             } else {
                 LOG_DBG("System Long Press: BT Pairing Mode");
                 ble_service.start_advertising_discoverable();
-                hw.set_led(LED_SEQ_ADV_DISCO);
+                hw.set_led(LedPattern::AdvertisingDiscoverable);
             }
             system_press_start = -1;
         }
@@ -248,7 +250,7 @@ void OceanPadApp::handle_system_logic(const GamepadState& gp_state) {
         system_press_start = 0;
     }
 
-    if (gp_state.buttons.home) {
+    if (gamepad_state.buttons.home) {
         if (home_press_start == 0) {
             home_press_start = k_uptime_get();
         } else if (home_press_start > 0 && (k_uptime_get() - home_press_start >= LONG_PRESS_TIMEOUT_MS)) {
@@ -266,12 +268,12 @@ void OceanPadApp::handle_system_logic(const GamepadState& gp_state) {
 void OceanPadApp::start_advertising() {
     if (ble_service.has_bonded_peer())
     {
-        hw.set_led(LED_SEQ_ADV_UNDISCO);
+        hw.set_led(LedPattern::AdvertisingUndiscoverable);
         ble_service.start_advertising_undiscoverable();
     }
     else
     {
-        hw.set_led(LED_SEQ_ADV_DISCO);
+        hw.set_led(LedPattern::AdvertisingDiscoverable);
         ble_service.start_advertising_discoverable();
     }
 }
@@ -279,10 +281,10 @@ void OceanPadApp::start_advertising() {
 void OceanPadApp::on_advertising_discoverable_timeout() {
     if (ble_service.get_state() >= BleServiceState::Connected)
     {
-        hw.set_led(true);
+        hw.set_led(LedPattern::Connected);
     }
     else if (ble_service.has_bonded_peer()) {
-        hw.set_led(LED_SEQ_ADV_UNDISCO);
+        hw.set_led(LedPattern::AdvertisingUndiscoverable);
         ble_service.start_advertising_undiscoverable();
     }
     else
@@ -292,9 +294,9 @@ void OceanPadApp::on_advertising_discoverable_timeout() {
 }
 
 bool OceanPadApp::is_state_idle(const GamepadState& gp_state) {
-    DigitalButtons btns = gp_state.buttons;
-    btns.switch_xd = 0;
-    if (*(uint16_t*)(&btns))
+    DigitalButtons btns_copy = gp_state.buttons;
+    btns_copy.xd_switch = 0;
+    if (*(uint16_t*)(&btns_copy))
     {
         return false;
     }

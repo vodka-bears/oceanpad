@@ -48,33 +48,3 @@ struct RawData {
     RawAxes raw_axes;
     IMUData raw_imu;
 };
-
-struct StickCalib {
-    uint16_t min;
-    uint16_t max;
-    uint16_t center;
-};
-
-struct TriggerCalib {
-    uint16_t min;
-    uint16_t max;
-};
-
-struct CalibData {
-    StickCalib lx;
-    StickCalib ly;
-    StickCalib rx;
-    StickCalib ry;
-
-    TriggerCalib lt;
-    TriggerCalib rt;
-};
-
-
-enum class CalibState : uint8_t {
-    Idle,
-    WaitingForCenter,
-    MeasuringLimits,
-    Saving
-};
-

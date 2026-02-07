@@ -16,7 +16,7 @@ private:
     void input_loop();
     void system_loop();
 
-    void handle_system_logic(const GamepadState& gp_state);
+    void handle_system_logic();
 
     void start_advertising();
 
@@ -46,32 +46,12 @@ private:
 
     uint64_t interval_us = 7500;
 
+    GamepadState gamepad_state;
+
     static inline const int32_t LONG_PRESS_TIMEOUT_MS = 3'000;
     static inline const int32_t BATTERY_UPDATE_PERIOD_MS = 30'000;
     static inline const int64_t IDLE_TIMEOUT_MS = 900'000;
     static inline const uint16_t AXIS_ACTIVITY_THRESHOLD = 2048;
-
-    static constexpr LedPwmParams LED_SEQ_ADV_DISCO {
-        .min_brightness = 0,
-        .max_brightness = 255,
-        .rise_ms = 100,
-        .hold_ms = 0,
-        .fall_ms = 100,
-        .pulse_delay_ms = 0,
-        .burst_delay_ms = 0,
-        .pulses_per_burst = 1,
-    };
-
-    static constexpr LedPwmParams LED_SEQ_ADV_UNDISCO {
-        .min_brightness = 0,
-        .max_brightness = 255,
-        .rise_ms = 200,
-        .hold_ms = 0,
-        .fall_ms = 200,
-        .pulse_delay_ms = 0,
-        .burst_delay_ms = 600,
-        .pulses_per_burst = 2,
-    };
 
     struct k_thread input_thread_data;
     struct k_thread system_thread_data;

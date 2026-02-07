@@ -16,7 +16,7 @@ struct LedPwmParams {
 
 class LedBlinker {
 public:
-    enum class LedState { Idle, Rising, Holding, Falling, PulseGap, BurstGap };
+    enum class LedState : uint8_t { Idle, Rising, Holding, Falling, PulseGap, BurstGap };
 
     int init();
     void start_sequence(const LedPwmParams& params);
@@ -28,8 +28,8 @@ private:
     struct k_work_delayable work;
     LedPwmParams current_params;
 
-    LedState current_state = LedState::Idle;
     uint32_t state_start_ms = 0;
+    LedState current_state = LedState::Idle;
     uint8_t  pulse_counter = 0;
 
     static constexpr const struct pwm_dt_spec led_pwm = PWM_DT_SPEC_GET(DT_NODELABEL(status_pwm_led));
