@@ -2,13 +2,13 @@
 
 #include <zephyr/device.h>
 
-#include "hardware/HardwareTypes.hpp"
-#include "hardware/NativeButtonsReader.hpp"
-#include "hardware/ExpanderButtonsReader.hpp"
-#include "hardware/RawAxesReader.hpp"
-#include "hardware/RawImuReader.hpp"
+#include "HardwareManager/HardwareTypes.hpp"
+#include "HardwareManager/RawInputReader/NativeButtonsReader.hpp"
+#include "HardwareManager/RawInputReader/ExpanderButtonsReader.hpp"
+#include "HardwareManager/RawInputReader/RawAxesReader.hpp"
+#include "HardwareManager/RawInputReader/RawImuReader.hpp"
 
-class RawDataReader final {
+class RawInputReader final {
 public:
     int init();
     int deinit();

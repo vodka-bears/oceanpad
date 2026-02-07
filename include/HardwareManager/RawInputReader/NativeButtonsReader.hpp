@@ -2,7 +2,7 @@
 
 #include <zephyr/drivers/gpio.h>
 
-#include "hardware/HardwareTypes.hpp"
+#include "HardwareManager/HardwareTypes.hpp"
 
 class NativeButtonsReader final {
 public:

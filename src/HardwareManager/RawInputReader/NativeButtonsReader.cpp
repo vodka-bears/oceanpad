@@ -1,4 +1,4 @@
-#include "hardware/NativeButtonsReader.hpp"
+#include "HardwareManager/RawInputReader/NativeButtonsReader.hpp"
 
 int NativeButtonsReader::init() {
     int ret = 0;

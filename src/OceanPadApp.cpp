@@ -37,7 +37,7 @@ void OceanPadApp::run() {
 
     LOG_DBG("X-D switch is %s", xd_switch_was_on ? "on" : "off");
 
-    led_flasher.set_handler(led_bridge, &hw);
+    //led_flasher.set_handler(led_bridge, &hw);
 
     if (xd_switch_was_on) {
         current_codec = &abitdo_codec;
@@ -118,7 +118,7 @@ void OceanPadApp::run() {
     }
     ble_service.set_output_report_callback(vibration_callback_wrapper);
     ble_service.set_status_callbacks(
-        []() { g_app_instance->led_flasher.turn_on(); },
+        []() { g_app_instance->hw.set_led(true); },
         []() { g_app_instance->hw.sleep(); },
         []() { g_app_instance->start_advertising(); },
         []() { g_app_instance->on_advertising_discoverable_timeout(); },
@@ -158,8 +158,6 @@ void OceanPadApp::input_thread_fn(void *arg1, void *arg2, void *arg3) {
 
     uint64_t next_tick = k_uptime_ticks();
     const uint64_t interval_ticks = k_us_to_ticks_near64(app->interval_us);
-    //const uint64_t interval_ticks = k_us_to_ticks_near64(7500);
-    //const uint64_t interval_ticks = k_us_to_ticks_near64(8333);
 
     while (true) {
         uint64_t now = k_uptime_ticks();
@@ -184,13 +182,6 @@ void OceanPadApp::system_thread_fn(void *arg1, void *arg2, void *arg3) {
 }
 
 void OceanPadApp::input_loop() {
-    /*
-    hw.update_phys();
-    if (xd_switch_was_on)
-    {
-        hw.update_imu();
-    }
-    */
     hw.update();
     if (!hw.is_calibration()) {
         GamepadState gp_state = hw.get_state_copy();
@@ -244,7 +235,7 @@ void OceanPadApp::handle_system_logic(const GamepadState& gp_state) {
             } else {
                 LOG_DBG("System Long Press: BT Pairing Mode");
                 ble_service.start_advertising_discoverable();
-                led_flasher.start(LED_SEQ_ADV_DISCO);
+                hw.set_led(LED_SEQ_ADV_DISCO);
             }
             system_press_start = -1;
         }
@@ -257,6 +248,7 @@ void OceanPadApp::handle_system_logic(const GamepadState& gp_state) {
             home_press_start = k_uptime_get();
         } else if (home_press_start > 0 && (k_uptime_get() - home_press_start >= LONG_PRESS_TIMEOUT_MS)) {
             LOG_INF("HOME Long Press: System OFF");
+            ble_service.do_disconnect();
             hw.sleep();
             home_press_start = -1;
         }
@@ -265,20 +257,16 @@ void OceanPadApp::handle_system_logic(const GamepadState& gp_state) {
     }
 }
 
-void OceanPadApp::led_bridge(bool state, void* context) {
-    auto* hw = static_cast<HardwareManager*>(context);
-    hw->set_led(state);
-}
 
 void OceanPadApp::start_advertising() {
     if (ble_service.has_bonded_peer())
     {
-        led_flasher.start(LED_SEQ_ADV_UNDISCO);
+        hw.set_led(LED_SEQ_ADV_UNDISCO);
         ble_service.start_advertising_undiscoverable();
     }
     else
     {
-        led_flasher.start(LED_SEQ_ADV_DISCO);
+        hw.set_led(LED_SEQ_ADV_DISCO);
         ble_service.start_advertising_discoverable();
     }
 }
@@ -286,10 +274,10 @@ void OceanPadApp::start_advertising() {
 void OceanPadApp::on_advertising_discoverable_timeout() {
     if (ble_service.get_state() >= BleServiceState::Connected)
     {
-        led_flasher.turn_on();
+        hw.set_led(true);
     }
     else if (ble_service.has_bonded_peer()) {
-        led_flasher.start(LED_SEQ_ADV_UNDISCO);
+        hw.set_led(LED_SEQ_ADV_UNDISCO);
         ble_service.start_advertising_undiscoverable();
     }
     else

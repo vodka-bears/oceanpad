@@ -1,4 +1,4 @@
-#include "hardware/HardwareManager.hpp"
+#include "HardwareManager/HardwareManager.hpp"
 #include <zephyr/logging/log.h>
 #include <hal/nrf_saadc.h>
 #include <zephyr/sys/reboot.h>
@@ -37,17 +37,28 @@ int HardwareManager::init() {
     }
 
     gpio_pin_configure_dt(&axes_pwr, GPIO_OUTPUT_ACTIVE);
-    gpio_pin_configure_dt(&status_led, GPIO_OUTPUT_ACTIVE);
+    //gpio_pin_configure_dt(&status_led, GPIO_OUTPUT_ACTIVE);
 
     gpio_pin_set_dt(&axes_pwr, 1);
-    gpio_pin_set_dt(&status_led, 0);
+    //gpio_pin_set_dt(&status_led, 0);
 
     if (!pwm_is_ready_dt(&motor_big) || !pwm_is_ready_dt(&motor_small)) {
         LOG_ERR("Motor PWM not init!");
         return -ENODEV;
     }
-    raw_data_reader.init();
-    err = raw_data_reader.getRawData(raw_data);
+    err = raw_input_reader.init();
+    if (err)
+    {
+        LOG_ERR("Failed to setup raw input reader,  err %d", err);
+        return err;
+    }
+    err = led_blinker.init();
+    if (err)
+    {
+        LOG_ERR("Failed to setup led flasherr,  err %d", err);
+        return err;
+    }
+    err = raw_input_reader.getRawData(raw_data);
     k_mutex_lock(&data_mutex, K_FOREVER);
     copy_native_buttons();
     k_mutex_unlock(&data_mutex);
@@ -56,7 +67,7 @@ int HardwareManager::init() {
 }
 
 int HardwareManager::update() {
-    int ret = raw_data_reader.getRawData(raw_data);
+    int ret = raw_input_reader.getRawData(raw_data);
     if (ret) {
         return ret;
     }
@@ -105,7 +116,19 @@ void HardwareManager::set_vibration(VibrationData vibr_d) {
 }
 
 void HardwareManager::set_led(bool is_on) {
-    gpio_pin_set_dt(&status_led, is_on);
+    if (is_calibration() || ignore_led)
+    {
+        return;
+    }
+    led_blinker.set_brightness(is_on ? 255 : 0);
+}
+
+void HardwareManager::set_led(const LedPwmParams& led_params) {
+    if (is_calibration() || ignore_led)
+    {
+        return;
+    }
+    led_blinker.start_sequence(led_params);
 }
 
 uint8_t HardwareManager::get_battery_percent() {
@@ -161,10 +184,12 @@ bool HardwareManager::is_calibration() {
 }
 
 void HardwareManager::restart() {
-    int err = raw_data_reader.deinit();
+    int err = raw_input_reader.deinit();
     if (err) {
         LOG_ERR("RawDataReader deinit failed, err: %d", err);
     }
+    ignore_led = true;
+    led_blinker.set_brightness(0);
     LOG_DBG("Restarting");
     k_msleep(100);
     sys_reboot(SYS_REBOOT_COLD);
@@ -173,10 +198,12 @@ void HardwareManager::restart() {
 void HardwareManager::sleep() {
     set_led(false);
     gpio_pin_set_dt(&axes_pwr, 0);
-    int err = raw_data_reader.deinit();
+    int err = raw_input_reader.deinit();
     if (err) {
         LOG_ERR("RawDataReader deinit failed, err: %d", err);
     }
+    ignore_led = true;
+    led_blinker.set_brightness(0);
     LOG_DBG("Going to sleep");
     k_msleep(100);
     nrf_power_system_off(NRF_POWER);
@@ -208,14 +235,6 @@ int HardwareManager::settings_set(const char *name, size_t len, settings_read_cb
     }
 
     return -ENOENT;
-}
-
-void HardwareManager::debug_print_raw() {
-    LOG_DBG("LX %4d LY %4d RX %4d RY %4d LT %4d RT %4d",
-        raw_data.raw_axes.raw_lx, raw_data.raw_axes.raw_ly,
-        raw_data.raw_axes.raw_rx, raw_data.raw_axes.raw_ry,
-        raw_data.raw_axes.raw_lt, raw_data.raw_axes.raw_rt
-    );
 }
 
 void HardwareManager::copy_expander() {

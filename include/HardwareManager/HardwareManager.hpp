@@ -8,7 +8,8 @@
 #include <zephyr/settings/settings.h>
 
 #include "GamepadState.hpp"
-#include "hardware/RawDataReader.hpp"
+#include "HardwareManager/RawInputReader/RawInputReader.hpp"
+#include "HardwareManager/LedBlinker.hpp"
 
 class HardwareManager {
 public:
@@ -22,6 +23,7 @@ public:
     void set_vibration(VibrationData vibr_d);
 
     void set_led(bool is_on);
+    void set_led(const LedPwmParams& led_params);
 
     uint8_t get_battery_percent();
 
@@ -32,8 +34,6 @@ public:
     void sleep();
 
     static int settings_set(const char *name, size_t len, settings_read_cb read_cb, void *cb_arg);
-
-    void debug_print_raw();
 
 private:
     void copy_expander();
@@ -53,13 +53,15 @@ private:
     static constexpr struct pwm_dt_spec motor_small = PWM_DT_SPEC_GET(DT_NODELABEL(motor_small));
 
     static constexpr struct gpio_dt_spec axes_pwr = GPIO_DT_SPEC_GET(DT_NODELABEL(axes_pwr), gpios);
-    static constexpr struct gpio_dt_spec status_led = GPIO_DT_SPEC_GET(DT_NODELABEL(status_led), gpios);
 
     static constexpr adc_dt_spec vbat = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 6);
 
     struct k_mutex data_mutex;
 
-    RawDataReader raw_data_reader;
+    RawInputReader raw_input_reader;
+
+    LedBlinker led_blinker;
+    bool ignore_led{ false };
 
     GamepadState input_state;
 

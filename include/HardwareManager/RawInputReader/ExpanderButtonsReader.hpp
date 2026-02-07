@@ -3,7 +3,7 @@
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/gpio.h>
 
-#include "hardware/HardwareTypes.hpp"
+#include "HardwareManager/HardwareTypes.hpp"
 
 class ExpanderButtonsReader final {
 public:

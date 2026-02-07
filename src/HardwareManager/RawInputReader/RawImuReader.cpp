@@ -1,4 +1,4 @@
-#include "hardware/RawImuReader.hpp"
+#include "HardwareManager/RawInputReader/RawImuReader.hpp"
 
 #define IMU_ADDR                0x68
 

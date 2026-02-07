@@ -2,7 +2,7 @@
 
 #include <zephyr/drivers/i2c.h>
 
-#include "hardware/HardwareTypes.hpp"
+#include "HardwareManager/HardwareTypes.hpp"
 
 class RawImuReader final {
 public:

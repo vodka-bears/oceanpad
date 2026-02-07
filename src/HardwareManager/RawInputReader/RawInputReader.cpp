@@ -1,10 +1,10 @@
 #include <zephyr/logging/log.h>
 
-#include "hardware/RawDataReader.hpp"
+#include "HardwareManager/RawInputReader/RawInputReader.hpp"
 
-LOG_MODULE_REGISTER(RawDataReader, LOG_LEVEL_WRN);
+LOG_MODULE_REGISTER(RawInputReader, LOG_LEVEL_WRN);
 
-int RawDataReader::init() {
+int RawInputReader::init() {
     int err = 0;
 
     err = native_buttons_reader.init();
@@ -48,7 +48,7 @@ int RawDataReader::init() {
     return 0;
 }
 
-int RawDataReader::deinit() {
+int RawInputReader::deinit() {
     int err = 0;
 
     err = expander_buttons_reader.deinit();
@@ -84,7 +84,7 @@ int RawDataReader::deinit() {
     return 0;
 }
 
-int RawDataReader::getRawData(RawData & raw_data) {
+int RawInputReader::getRawData(RawData & raw_data) {
     int err = 0;
 
     err = native_buttons_reader.getRawData(raw_data.native_buttons);

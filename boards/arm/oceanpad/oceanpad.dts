@@ -1,6 +1,5 @@
 /dts-v1/;
 #include <nordic/nrf52832_qfaa.dtsi>
-#include "oceanpad-pinctrl.dtsi"
 
 / {
     model = "OceanPad F710 Retrofit";
@@ -18,17 +17,13 @@
     /* Digital outputs (GPIO only) */
     leds {
         compatible = "gpio-leds";
-        status_led: led_0 {
-            gpios = <&gpio0 2 GPIO_ACTIVE_HIGH>;
-            label = "Status LED";
-        };
         axes_pwr: axes_pwr_en {
             gpios = <&gpio0 8 GPIO_ACTIVE_HIGH>;
             label = "Potentiometers Power Rail";
         };
     };
 
-    /* PWM Vibration Motors */
+    /* PWM Outputs: Vibration Motors & Status LED */
     pwmleds {
         compatible = "pwm-leds";
         motor_big: motor_0 {
@@ -38,6 +33,10 @@
         motor_small: motor_1 {
             pwms = <&pwm0 1 PWM_USEC(50) PWM_POLARITY_NORMAL>;
             label = "Small Vibration Motor";
+        };
+        status_pwm_led: led_pwm_0 {
+            pwms = <&pwm0 2 PWM_USEC(50) PWM_POLARITY_NORMAL>;
+            label = "Status PWM LED";
         };
     };
 
@@ -58,7 +57,7 @@
             label = "X-D Selector Switch";
         };
         expander_reset: exp_reset {
-            gpios = <&gpio0 13 GPIO_ACTIVE_LOW>; // Активный низкий уровень
+            gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
             label = "PI4IOE5V6416 Reset";
         };
     };
@@ -76,7 +75,57 @@
     };
 };
 
-/* Hardware Overrides */
+/* Hardware Overrides & Peripheral Configuration */
+
+&pinctrl {
+    uart0_default: uart0_default {
+        group1 {
+            psels = <NRF_PSEL(UART_TX, 0, 20)>,
+                    <NRF_PSEL(UART_RX, 0, 19)>;
+        };
+    };
+
+    uart0_sleep: uart0_sleep {
+        group1 {
+            psels = <NRF_PSEL(UART_TX, 0, 20)>,
+                    <NRF_PSEL(UART_RX, 0, 19)>;
+            low-power-enable;
+        };
+    };
+
+    i2c0_default: i2c0_default {
+        group1 {
+            psels = <NRF_PSEL(TWIM_SDA, 0, 9)>,
+                    <NRF_PSEL(TWIM_SCL, 0, 10)>;
+        };
+    };
+
+    i2c0_sleep: i2c0_sleep {
+        group1 {
+            psels = <NRF_PSEL(TWIM_SDA, 0, 9)>,
+                    <NRF_PSEL(TWIM_SCL, 0, 10)>;
+            low-power-enable;
+        };
+    };
+
+    pwm0_default: pwm0_default {
+        group1 {
+            psels = <NRF_PSEL(PWM_OUT0, 0, 7)>,  /* Heavy Motor */
+                    <NRF_PSEL(PWM_OUT1, 0, 6)>,  /* Small Motor */
+                    <NRF_PSEL(PWM_OUT2, 0, 2)>;  /* Status LED */
+            nordic,drive-mode = <NRF_DRIVE_H0H1>;
+        };
+    };
+
+    pwm0_sleep: pwm0_sleep {
+        group1 {
+            psels = <NRF_PSEL(PWM_OUT0, 0, 7)>,
+                    <NRF_PSEL(PWM_OUT1, 0, 6)>,
+                    <NRF_PSEL(PWM_OUT2, 0, 2)>;
+            low-power-enable;
+        };
+    };
+};
 
 &reg {
     regulator-initial-mode = <NRF5X_REG_MODE_DCDC>;

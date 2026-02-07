@@ -1,9 +1,8 @@
 #pragma once
-#include "hardware/HardwareManager.hpp"
+#include "HardwareManager/HardwareManager.hpp"
 #include "ReportCodecXbox.hpp"
 #include "ReportCodec8BitDo.hpp"
 #include "BleService.hpp"
-#include "LedFlasher.hpp"
 
 class OceanPadApp {
 public:
@@ -19,8 +18,6 @@ private:
 
     void handle_system_logic(const GamepadState& gp_state);
 
-    static void led_bridge(bool state, void* context);
-
     void start_advertising();
 
     void on_advertising_discoverable_timeout();
@@ -28,8 +25,6 @@ private:
     static bool is_state_idle(const GamepadState& gp_state);
 
     HardwareManager hw;
-
-    LedFlasher led_flasher;
 
     using ReportCodecOceanPad = ReportCodec<GamepadState, VibrationData>;
 
@@ -56,18 +51,26 @@ private:
     static inline const int64_t IDLE_TIMEOUT_MS = 900'000;
     static inline const uint16_t AXIS_ACTIVITY_THRESHOLD = 2048;
 
-    static constexpr LedParams LED_SEQ_ADV_DISCO = {
-        .count = 1,
-        .on_time_ms = 200,
-        .off_time_ms = 200,
-        .delay_time_ms = 200,
+    static constexpr LedPwmParams LED_SEQ_ADV_DISCO {
+        .min_brightness = 0,
+        .max_brightness = 255,
+        .rise_ms = 100,
+        .hold_ms = 0,
+        .fall_ms = 100,
+        .pulse_delay_ms = 0,
+        .burst_delay_ms = 0,
+        .pulses_per_burst = 1,
     };
 
-    static constexpr LedParams LED_SEQ_ADV_UNDISCO = {
-        .count = 2,
-        .on_time_ms = 200,
-        .off_time_ms = 200,
-        .delay_time_ms = 600,
+    static constexpr LedPwmParams LED_SEQ_ADV_UNDISCO {
+        .min_brightness = 0,
+        .max_brightness = 255,
+        .rise_ms = 200,
+        .hold_ms = 0,
+        .fall_ms = 200,
+        .pulse_delay_ms = 0,
+        .burst_delay_ms = 600,
+        .pulses_per_burst = 2,
     };
 
     struct k_thread input_thread_data;

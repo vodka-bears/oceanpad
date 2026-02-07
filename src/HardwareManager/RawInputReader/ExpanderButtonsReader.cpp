@@ -1,4 +1,4 @@
-#include "hardware/ExpanderButtonsReader.hpp"
+#include "HardwareManager/RawInputReader/ExpanderButtonsReader.hpp"
 
 /* PI4IOE5V6416 I2C Address and Registers */
 #define EXP_ADDR        0x20

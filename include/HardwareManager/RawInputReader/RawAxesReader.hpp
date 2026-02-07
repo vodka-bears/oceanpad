@@ -2,7 +2,7 @@
 
 #include <zephyr/drivers/adc.h>
 
-#include "hardware/HardwareTypes.hpp"
+#include "HardwareManager/HardwareTypes.hpp"
 
 class RawAxesReader final {
 public:

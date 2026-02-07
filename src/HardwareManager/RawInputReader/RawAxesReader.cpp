@@ -1,4 +1,4 @@
-#include "hardware/RawAxesReader.hpp"
+#include "HardwareManager/RawInputReader/RawAxesReader.hpp"
 
 int RawAxesReader::init() {
     if (!device_is_ready(adc_dev)) {
