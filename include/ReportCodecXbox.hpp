@@ -2,10 +2,10 @@
 #include "ReportCodec.hpp"
 #include "GamepadState.hpp"
 
-class ReportCodecXbox : public ReportCodec<GamepadState, VibrationData> {
+class ReportCodecXbox : public ReportCodec<GamepadState, VibrationDataXbox> {
 public:
-    virtual uint8_t encode_input(uint8_t report_id, const GamepadState& state, uint8_t* buffer, uint16_t buffer_len) const override;
-    virtual VibrationData decode_output(uint8_t report_id, const uint8_t* report_buffer, uint16_t report_len) const override;
+    virtual uint8_t encode_input(uint8_t report_id, const GamepadState& data, uint8_t* report_buffer, uint16_t report_len) const override;
+    virtual uint8_t decode_output(uint8_t report_id, VibrationDataXbox& data, const uint8_t* report_buffer, uint16_t report_len) const override;
 };
 
 struct __packed InputReportXbox {
@@ -43,15 +43,3 @@ struct __packed InputReportXbox {
     uint8_t  pad_share : 7;
 };
 
-struct __packed OutputReportXbox {
-    uint8_t enable_actuators : 4;
-    uint8_t pad_enable       : 4;
-
-    uint8_t motor_magnitude[4];
-
-    uint8_t duration;
-
-    uint8_t start_delay;
-
-    uint8_t loop_count;
-};

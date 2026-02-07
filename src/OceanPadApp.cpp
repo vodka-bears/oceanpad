@@ -148,9 +148,14 @@ void OceanPadApp::run() {
 }
 
 void OceanPadApp::handle_vibration(uint8_t report_id, const uint8_t* data, uint16_t len) {
-    const VibrationData vibr_data = current_codec->decode_output(report_id, data, len);
-    hw.set_vibration(vibr_data);
-    //LOG_DBG("Vibration: big: %d small: %d", vibr_data.motor_big, vibr_data.motor_small);
+    VibrationDataXbox vibr_data;
+    int data_len = current_codec->decode_output(report_id, vibr_data, data, len);
+    if (data_len == 0) {
+        LOG_WRN("Failed to decode output report!");
+    }
+    else {
+        hw.set_vibration(vibr_data);
+    }
 }
 
 void OceanPadApp::input_thread_fn(void *arg1, void *arg2, void *arg3) {

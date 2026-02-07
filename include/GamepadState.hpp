@@ -55,7 +55,21 @@ struct GamepadState {
     uint8_t battery_percent;
 };
 
-struct VibrationData {
-    uint8_t big_motor;
-    uint8_t small_motor;
+struct __packed VibrationDataXbox {
+    uint8_t enable_right_motor : 1;
+    uint8_t enable_left_motor : 1;
+    uint8_t enable_right_trigger : 1;
+    uint8_t enable_left_trigger : 1;
+    uint8_t pad_enable       : 4;
+
+    uint8_t magnitude_left_trigger;
+    uint8_t magnitude_right_trigger;
+    uint8_t magnitude_left_motor;
+    uint8_t magnitude_right_motor;
+
+    uint8_t duration;
+
+    uint8_t start_delay;
+
+    uint8_t loop_count;
 };

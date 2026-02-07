@@ -26,7 +26,7 @@ private:
 
     HardwareManager hw;
 
-    using ReportCodecOceanPad = ReportCodec<GamepadState, VibrationData>;
+    using ReportCodecOceanPad = ReportCodec<GamepadState, VibrationDataXbox>;
 
     const ReportCodecOceanPad* current_codec = nullptr;
 

@@ -38,10 +38,13 @@ int HardwareManager::init() {
     gpio_pin_configure_dt(&axes_pwr, GPIO_OUTPUT_ACTIVE);
     gpio_pin_set_dt(&axes_pwr, 1);
 
-    if (!pwm_is_ready_dt(&motor_big) || !pwm_is_ready_dt(&motor_small)) {
-        LOG_ERR("Motor PWM not init!");
-        return -ENODEV;
+    err = motor_vibrator.init();
+    if (err)
+    {
+        LOG_ERR("Failed to setup motor vibrator,  err %d", err);
+        return err;
     }
+
     err = raw_input_reader.init();
     if (err)
     {
@@ -90,25 +93,8 @@ GamepadState HardwareManager::get_state_copy() {
     return ret;
 }
 
-void HardwareManager::set_vibration(VibrationData vibr_d) {
-    auto calculate_pulse = [this](const struct pwm_dt_spec *spec, uint8_t pct) -> uint32_t {
-        if (pct == 0) return 0;
-
-        if (pct > 100) pct = 100;
-
-        uint32_t scaled_pct = MIN_MOTOR_PERCENT + (static_cast<uint32_t>(pct) * (100 - MIN_MOTOR_PERCENT) / 100);
-
-        return (spec->period * scaled_pct) / 100;
-    };
-
-    uint32_t pulse_big = calculate_pulse(&motor_big, vibr_d.big_motor);
-    uint32_t pulse_small = calculate_pulse(&motor_small, vibr_d.small_motor);
-
-    LOG_DBG("Vibration scaling: H %d%% -> pulse %d | G %d%% -> pulse %d",
-            vibr_d.big_motor, pulse_big, vibr_d.small_motor, pulse_small);
-
-    pwm_set_pulse_dt(&motor_big, pulse_big);
-    pwm_set_pulse_dt(&motor_small, pulse_small);
+void HardwareManager::set_vibration(const VibrationDataXbox& vibr_d) {
+    motor_vibrator.apply_vibration(vibr_d);
 }
 
 void HardwareManager::set_led(bool is_on) {
@@ -147,6 +133,7 @@ void HardwareManager::restart() {
     }
     ignore_led = true;
     led_blinker.set_brightness(0);
+    motor_vibrator.stop();
     LOG_DBG("Restarting");
     k_msleep(100);
     sys_reboot(SYS_REBOOT_COLD);
@@ -161,6 +148,7 @@ void HardwareManager::sleep() {
     }
     ignore_led = true;
     led_blinker.set_brightness(0);
+    motor_vibrator.stop();
     LOG_DBG("Going to sleep");
     k_msleep(100);
     nrf_power_system_off(NRF_POWER);

@@ -2,6 +2,11 @@
 #include "ReportCodec.hpp"
 #include "GamepadState.hpp"
 
+class ReportCodec8BitDo : public ReportCodec<GamepadState, VibrationDataXbox> {
+public:
+    virtual uint8_t encode_input(uint8_t report_id, const GamepadState& data, uint8_t* report_buffer, uint16_t report_len) const override;
+    virtual uint8_t decode_output(uint8_t report_id, VibrationDataXbox& data, const uint8_t* report_buffer, uint16_t report_len) const override;
+};
 
 struct __packed InputReport8BitDo {
     uint8_t  dpad      : 4;
@@ -52,10 +57,4 @@ struct __packed OutputReport8BitDo {
     uint8_t motor_big;
     uint8_t motor_small;
     uint8_t padding[2];
-};
-
-class ReportCodec8BitDo : public ReportCodec<GamepadState, VibrationData> {
-public:
-    virtual uint8_t encode_input(uint8_t report_id, const GamepadState& state, uint8_t* buffer, uint16_t buffer_len) const override;
-    virtual VibrationData decode_output(uint8_t report_id, const uint8_t* report_buffer, uint16_t report_len) const override;
 };
