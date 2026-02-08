@@ -19,7 +19,18 @@ void SingleMotorVibrator::start_sequence(const MotorSequenceParams& params) {
     }
     else
     {
-        k_work_reschedule(&work, K_MSEC(current_params.delay  * 10));
+        if (current_params.delay == 0)
+        {
+            is_running = true;
+            sequence_counter = current_params.count;
+            apply_pwm(current_params.magnitude);
+            const uint32_t total_time = static_cast<uint32_t>(current_params.duration) * (current_params.count + 1) * 10;
+            k_work_reschedule(&work, K_MSEC(total_time));
+        }
+        else
+        {
+            k_work_reschedule(&work, K_MSEC(current_params.delay * 10));
+        }
     }
 }
 
@@ -46,7 +57,7 @@ void SingleMotorVibrator::process() {
         apply_pwm(0);
         is_running = false;
         if (sequence_counter == current_params.count) {
-            k_work_cancel_delayable(&work);
+            stop();
         } else {
             sequence_counter++;
             k_work_reschedule(&work, K_MSEC(current_params.delay  * 10));
