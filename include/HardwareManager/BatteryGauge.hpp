@@ -5,8 +5,14 @@
 class BatteryGauge final {
 public:
     int init();
+    int update();
     uint8_t get_battery_percent();
+    uint16_t get_vbat_mv_last();
 private:
+    static inline const size_t VBAT_HISTORY_LEN = 64;
+    uint8_t last_history_idx = 0;
+    uint16_t voltage_history[VBAT_HISTORY_LEN];
+
     static constexpr adc_dt_spec vbat_adc_chan = ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 6);
 
     static inline const uint32_t VBAT_SCALE_MUL = 201;

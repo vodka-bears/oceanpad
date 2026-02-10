@@ -55,6 +55,8 @@ private:
     GamepadState gamepad_state;
     RawData raw_data;
 
+    static inline const uint16_t MIN_VOLTAGE = 2200;
+
     static constexpr LedPwmParams LED_SEQ_CALIB {
         .min_brightness = 0,
         .max_brightness = 255,
@@ -69,9 +71,9 @@ private:
     static constexpr LedPwmParams LED_SEQ_ADV_DISCO {
         .min_brightness = 0,
         .max_brightness = 255,
-        .rise_ms = 100,
+        .rise_ms = 200,
         .hold_ms = 0,
-        .fall_ms = 100,
+        .fall_ms = 200,
         .pulse_delay_ms = 0,
         .burst_delay_ms = 0,
         .pulses_per_burst = 1,
@@ -84,7 +86,7 @@ private:
         .hold_ms = 0,
         .fall_ms = 200,
         .pulse_delay_ms = 0,
-        .burst_delay_ms = 600,
+        .burst_delay_ms = 300,
         .pulses_per_burst = 2,
     };
 };

@@ -32,6 +32,13 @@ int HardwareManager::init() {
         return err;
     }
 
+    if (uint16_t vbat = battery_gauge.get_vbat_mv_last(); vbat < MIN_VOLTAGE)
+    {
+        LOG_ERR("Voltage %d is too low, turning off", vbat);
+        sleep();
+        return -ENODEV;
+    }
+
     err = raw_input_reader.init();
     if (err)
     {
@@ -81,8 +88,14 @@ int HardwareManager::update() {
     if (ret) {
         return ret;
     }
+    ret = battery_gauge.update();
+    if (ret) {
+        return ret;
+    }
     GamepadState new_state;
     input_processor.process_raw_data(new_state, raw_data);
+    new_state.battery_percent = battery_gauge.get_battery_percent();
+    led_blinker.set_vbat(battery_gauge.get_vbat_mv_last());
     if (is_calibration()) {
         if (input_processor.is_ready_to_reboot_after_calibration()) {
             restart();
@@ -120,7 +133,6 @@ void HardwareManager::set_led(LedPattern led_pattern) {
 }
 
 uint8_t HardwareManager::get_battery_percent() {
-    gamepad_state.battery_percent = battery_gauge.get_battery_percent();;
     return gamepad_state.battery_percent;
 }
 

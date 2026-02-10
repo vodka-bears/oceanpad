@@ -151,6 +151,10 @@ void OceanPadApp::run() {
 
 void OceanPadApp::handle_vibration(uint8_t report_id, const uint8_t* data, uint16_t len) {
     VibrationDataXbox vibr_data;
+    if (hw.is_calibration())
+    {
+        return;
+    }
     int data_len = current_codec->decode_output(report_id, vibr_data, data, len);
     if (data_len == 0) {
         LOG_WRN("Failed to decode output report!");
@@ -172,7 +176,7 @@ void OceanPadApp::input_thread_fn(void *arg1, void *arg2, void *arg3) {
         app->input_loop();
         now = k_uptime_ticks();
         if (next_tick <= now) {
-            //LOG_DBG("late by %lld", now - next_tick);
+            LOG_DBG("late by %lld", now - next_tick);
             next_tick = now + interval_ticks;
         }
         k_sleep(K_TIMEOUT_ABS_TICKS(next_tick));
@@ -210,7 +214,7 @@ void OceanPadApp::system_loop() {
     hw.get_state(gamepad_state);
     handle_system_logic();
     int64_t current_time = k_uptime_get();
-    if (current_time > next_battery_update_time)
+    if (ble_service.get_state() >= BleServiceState::Connected && current_time > next_battery_update_time)
     {
         ble_service.update_battery_level(hw.get_battery_percent());
         next_battery_update_time = current_time + BATTERY_UPDATE_PERIOD_MS;
@@ -254,7 +258,7 @@ void OceanPadApp::handle_system_logic() {
         if (home_press_start == 0) {
             home_press_start = k_uptime_get();
         } else if (home_press_start > 0 && (k_uptime_get() - home_press_start >= LONG_PRESS_TIMEOUT_MS)) {
-            LOG_INF("HOME Long Press: System OFF");
+            LOG_DBG("HOME Long Press: System OFF");
             ble_service.do_disconnect();
             hw.sleep();
             home_press_start = -1;
