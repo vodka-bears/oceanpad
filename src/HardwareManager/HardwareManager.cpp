@@ -135,14 +135,13 @@ bool HardwareManager::is_calibration() {
 
 void HardwareManager::restart() {
     shutdown = true;
+    ignore_led = true;
+    led_blinker.set_brightness(0);
+    motor_vibrator.stop();
     int err = raw_input_reader.deinit();
     if (err) {
         LOG_ERR("RawDataReader deinit failed, err: %d", err);
     }
-    ignore_led = true;
-    led_blinker.set_brightness(0);
-    motor_vibrator.stop();
-    shutdown = true;
     LOG_DBG("Restarting");
     k_msleep(100);
     sys_reboot(SYS_REBOOT_COLD);
@@ -151,13 +150,14 @@ void HardwareManager::restart() {
 void HardwareManager::sleep() {
     shutdown = true;
     gpio_pin_set_dt(&axes_pwr, 0);
+    ignore_led = true;
+    led_blinker.set_brightness(0);
+    motor_vibrator.stop();
     int err = raw_input_reader.deinit();
     if (err) {
         LOG_ERR("RawDataReader deinit failed, err: %d", err);
     }
-    ignore_led = true;
-    led_blinker.set_brightness(0);
-    motor_vibrator.stop();
+
     LOG_DBG("Going to sleep");
     k_msleep(100);
     nrf_power_system_off(NRF_POWER);

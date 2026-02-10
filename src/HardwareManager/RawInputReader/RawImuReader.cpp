@@ -63,7 +63,7 @@ int RawImuReader::init() {
 }
 
 int RawImuReader::deinit() {
-    int err = i2c_reg_read_byte_dt(&imu_i2c, REG_PWR_MGMT0, PWR_MODE_SLEEP);
+    int err = i2c_reg_write_byte_dt(&imu_i2c, REG_PWR_MGMT0, PWR_MODE_SLEEP);
     if (err)
     {
         return err;

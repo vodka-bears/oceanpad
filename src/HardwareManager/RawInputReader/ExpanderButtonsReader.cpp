@@ -62,6 +62,10 @@ int ExpanderButtonsReader::deinit() {
     if (err) {
         return err;
     }
+    err = gpio_pin_set_dt(&exp_reset, 0); //resetting gpio expander pulling the reset line low
+    if (err) {
+        return err;
+    }
     return 0;
 }
 
