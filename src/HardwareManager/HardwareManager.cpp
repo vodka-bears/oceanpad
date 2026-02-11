@@ -5,7 +5,7 @@
 #include <hal/nrf_power.h>
 
 
-LOG_MODULE_REGISTER(HardwareManager, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(HardwareManager, LOG_LEVEL_DBG);
 
 HardwareManager::HardwareManager() {
     k_mutex_init(&data_mutex);
@@ -32,9 +32,9 @@ int HardwareManager::init() {
         return err;
     }
 
-    if (uint16_t vbat = battery_gauge.get_vbat_mv_last(); vbat < MIN_VOLTAGE)
+    if (uint16_t vbat = battery_gauge.get_vbat_mv_last(); battery_gauge.get_battery_percent() == 0)
     {
-        LOG_ERR("Voltage %d is too low, turning off", vbat);
+        LOG_WRN("Voltage %d is too low, turning off", vbat);
         sleep();
         return -ENODEV;
     }
@@ -95,6 +95,13 @@ int HardwareManager::update() {
     GamepadState new_state;
     input_processor.process_raw_data(new_state, raw_data);
     new_state.battery_percent = battery_gauge.get_battery_percent();
+    if (new_state.battery_percent == 0) {
+        uint8_t vbat = battery_gauge.get_vbat_mv_last();
+        if (vbat < MIN_VOLTAGE) {
+            LOG_WRN("Reached terminal voltage %d, going to sleep", vbat);
+            sleep();
+        }
+    }
     led_blinker.set_vbat(battery_gauge.get_vbat_mv_last());
     if (is_calibration()) {
         if (input_processor.is_ready_to_reboot_after_calibration()) {
@@ -169,7 +176,6 @@ void HardwareManager::sleep() {
     if (err) {
         LOG_ERR("RawDataReader deinit failed, err: %d", err);
     }
-
     LOG_DBG("Going to sleep");
     k_msleep(100);
     nrf_power_system_off(NRF_POWER);

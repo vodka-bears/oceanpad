@@ -90,10 +90,14 @@ int MotorVibrator::init() {
     if (err) {
         return err;
     }
+    is_init = true;
     return 0;
 }
 
 void MotorVibrator::apply_vibration(const VibrationDataXbox& vibration_data) {
+    if (!is_init) {
+        return;
+    }
     if (vibration_data.enable_left_motor) {
         left_motor_vibrator.start_sequence({
             vibration_data.magnitude_left_motor,
@@ -113,6 +117,9 @@ void MotorVibrator::apply_vibration(const VibrationDataXbox& vibration_data) {
 }
 
 void MotorVibrator::stop() {
+    if (!is_init) {
+        return;
+    }
     left_motor_vibrator.stop();
     right_motor_vibrator.stop();
 }

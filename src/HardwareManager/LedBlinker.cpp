@@ -43,6 +43,7 @@ void LedBlinker::start_sequence(const LedPwmParams& params) {
 void LedBlinker::set_brightness(uint8_t value) {
     if (value == 0) {
         transition_to(LedState::Off);
+        return;
     }
     current_params.max_brightness = value;
     current_params.min_brightness = value;

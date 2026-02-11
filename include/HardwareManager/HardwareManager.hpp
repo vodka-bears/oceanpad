@@ -55,7 +55,7 @@ private:
     GamepadState gamepad_state;
     RawData raw_data;
 
-    static inline const uint16_t MIN_VOLTAGE = 2200;
+    static inline const uint16_t MIN_VOLTAGE = 2150;
 
     static constexpr LedPwmParams LED_SEQ_CALIB {
         .min_brightness = 0,

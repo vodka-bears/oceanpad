@@ -35,8 +35,11 @@ private:
         {2550, 40},
         {2500, 30},
         {2450, 20},
-        {2400, 10},
-        {2300, 0}
+        {2400, 12},
+        {2350, 6},
+        {2300, 3},
+        {2250, 1},
+        {2200, 0}     // functional cutoff
     };
 
     static constexpr const size_t BATT_LUT_SIZE = sizeof(BATT_LUT) / sizeof(BATT_LUT[0]);

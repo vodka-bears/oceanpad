@@ -42,4 +42,6 @@ private:
 
     SingleMotorVibrator left_motor_vibrator;
     SingleMotorVibrator right_motor_vibrator;
+
+    bool is_init{ false };
 };

@@ -23,6 +23,7 @@ int NativeButtonsReader::deinit() {
             return -ENODEV;
         }
         if (pin == &home) {
+            ret = gpio_pin_configure_dt(pin, GPIO_INPUT);
             ret = gpio_pin_interrupt_configure_dt(pin, GPIO_INT_LEVEL_ACTIVE);
         } else {
             ret = gpio_pin_configure_dt(pin, GPIO_DISCONNECTED);
