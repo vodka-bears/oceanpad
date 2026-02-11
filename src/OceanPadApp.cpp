@@ -6,31 +6,25 @@
 
 LOG_MODULE_REGISTER(oceanpad_app, LOG_LEVEL_DBG);
 
-static OceanPadApp* g_app_instance = nullptr;
 const ReportCodecXbox OceanPadApp::xbox_codec;
 const ReportCodec8BitDo OceanPadApp::abitdo_codec;
+BleService OceanPadApp::ble_service;
 
-void vibration_callback_wrapper(uint8_t report_id, const uint8_t* data, uint16_t len) {
-    if (g_app_instance) {
-        g_app_instance->handle_vibration(report_id, data, len);
-    }
-}
 
 void OceanPadApp::run() {
+    int err = 0;
 
-    g_app_instance = this;
-
-    int ret = 0;
-
-    ret = settings_subsys_init();
-    if (ret) {
-        LOG_ERR("Settings subsys init failed (err %d)", ret);
+    err = settings_subsys_init();
+    if (err) {
+        LOG_ERR("Settings subsys init failed (err %d)", err);
+        k_sleep(K_FOREVER);
     }
 
-    ret = hw.init();
-    if (ret != 0)
+    err = hw.init();
+    if (err != 0)
     {
         LOG_ERR("Error hardware init");
+        k_sleep(K_FOREVER);
     }
 
 
@@ -39,7 +33,6 @@ void OceanPadApp::run() {
 
     LOG_DBG("X-D switch is %s", xd_switch_was_on ? "on" : "off");
 
-    //led_flasher.set_handler(led_bridge, &hw);
 
     if (xd_switch_was_on) {
         current_codec = &abitdo_codec;
@@ -110,31 +103,32 @@ void OceanPadApp::run() {
     };
 
     if (xd_switch_was_on) {
-        ret = ble_service.init(&abitdo_device_info, &abitdo_dis, &abitdo_hid);
+        err = ble_service.init(&abitdo_device_info, &abitdo_dis, &abitdo_hid);
     } else {
-        ret = ble_service.init(&xbox_device_info, &xbox_dis, &xbox_hid);
+        err = ble_service.init(&xbox_device_info, &xbox_dis, &xbox_hid);
     }
-    LOG_DBG("ble_service.init returned %d", ret);
-    if (ret) {
-        LOG_ERR("BLE init failed (err %d)", ret);
+    LOG_DBG("ble_service.init returned %d", err);
+    if (err) {
+        LOG_ERR("BLE init failed (err %d)", err);
+        k_sleep(K_FOREVER);
     }
-    ble_service.set_output_report_callback(vibration_callback_wrapper);
-    ble_service.set_status_callbacks(
-        []() { g_app_instance->hw.set_led(LedPattern::Connected); },
-        []() { g_app_instance->hw.sleep(); },
-        []() { /*g_app_instance->start_advertising();*/ },
-        []() { g_app_instance->on_advertising_discoverable_timeout(); },
-        []() { g_app_instance->hw.sleep(); }
-    );
-    ret = settings_load();
-    if (ret) {
-        LOG_ERR("Settings load failed (err %d)", ret);
+
+    hid_callbacks.set_ptr(this);
+    ble_service.set_callbacks(&hid_callbacks);
+    err = settings_load();
+    if (err) {
+        LOG_ERR("Settings load failed (err %d)", err);
+        k_sleep(K_FOREVER);
     }
 
     if (xd_switch_was_on) {
-        ret = ble_service.set_identity(1);
+        err = ble_service.set_identity(1);
     } else {
 
+    }
+    if (err) {
+        LOG_ERR("Set identity failed (err %d)", err);
+        k_sleep(K_FOREVER);
     }
 
     start_advertising();
@@ -147,21 +141,7 @@ void OceanPadApp::run() {
     k_thread_create(&system_thread_data, system_stack, K_THREAD_STACK_SIZEOF(system_stack),
                     system_thread_fn, this, NULL, NULL,
                     K_PRIO_PREEMPT(10), 0, K_NO_WAIT);
-}
-
-void OceanPadApp::handle_vibration(uint8_t report_id, const uint8_t* data, uint16_t len) {
-    VibrationDataXbox vibr_data;
-    if (hw.is_calibration())
-    {
-        return;
-    }
-    int data_len = current_codec->decode_output(report_id, vibr_data, data, len);
-    if (data_len == 0) {
-        LOG_WRN("Failed to decode output report!");
-    }
-    else {
-        hw.set_vibration(vibr_data);
-    }
+    k_sleep(K_FOREVER);
 }
 
 void OceanPadApp::input_thread_fn(void *arg1, void *arg2, void *arg3) {
@@ -200,12 +180,11 @@ void OceanPadApp::input_loop() {
         {
             last_non_idle_time = k_uptime_get();
         }
-        uint8_t input_report[34];
-        uint8_t report_len = current_codec->encode_input(1, gamepad_state, input_report, sizeof(input_report));
+        uint8_t report_len = current_codec->encode_input(1, gamepad_state, input_report_buffer, sizeof(input_report_buffer));
 
         if (ble_service.get_state() >= BleServiceState::Connected)
         {
-            ble_service.send_input_report(1, input_report, report_len);
+            ble_service.update_report(1, input_report_buffer, report_len);
         }
     }
 }
@@ -226,6 +205,7 @@ void OceanPadApp::system_loop() {
     }
     if (gamepad_state.buttons.xd_switch != xd_switch_was_on)
     {
+        ble_service.do_disconnect();
         LOG_DBG("X-D Switch flipped, restarting");
         hw.restart();
     }
@@ -245,7 +225,7 @@ void OceanPadApp::handle_system_logic() {
                 hw.restart();
             } else {
                 LOG_DBG("System Long Press: BT Pairing Mode");
-                ble_service.start_advertising_discoverable();
+                ble_service.start_advertising(true);
                 hw.set_led(LedPattern::AdvertisingDiscoverable);
             }
             system_press_start = -1;
@@ -273,12 +253,12 @@ void OceanPadApp::start_advertising() {
     if (ble_service.has_bonded_peer())
     {
         hw.set_led(LedPattern::AdvertisingUndiscoverable);
-        ble_service.start_advertising_undiscoverable();
+        ble_service.start_advertising(false);
     }
     else
     {
         hw.set_led(LedPattern::AdvertisingDiscoverable);
-        ble_service.start_advertising_discoverable();
+        ble_service.start_advertising(true);
     }
 }
 
@@ -289,7 +269,7 @@ void OceanPadApp::on_advertising_discoverable_timeout() {
     }
     else if (ble_service.has_bonded_peer()) {
         hw.set_led(LedPattern::AdvertisingUndiscoverable);
-        ble_service.start_advertising_undiscoverable();
+        ble_service.start_advertising(false);
     }
     else
     {
@@ -327,4 +307,55 @@ bool OceanPadApp::is_state_idle(const GamepadState& gp_state) {
         return false;
     }
     return true;
+}
+
+void OceanPadApp::handle_incoming_report(uint8_t report_id, const uint8_t* data, uint16_t len) {
+    VibrationDataXbox vibr_data;
+    if (hw.is_calibration())
+    {
+        return;
+    }
+    int data_len = current_codec->decode_output(report_id, vibr_data, data, len);
+    if (data_len == 0) {
+        LOG_WRN("Failed to decode output report!");
+    }
+    else {
+        hw.set_vibration(vibr_data);
+    }
+}
+
+void OceanPadApp::OceanPadHidCallbacks::on_incoming_report(uint8_t report_id, const uint8_t* data, uint16_t len) const {
+    if (!app_ptr) {
+        return;
+    }
+    app_ptr->handle_incoming_report(report_id, data, len);
+}
+
+void OceanPadApp::OceanPadHidCallbacks::on_connected() const {
+    if (!app_ptr) {
+        return;
+    }
+    app_ptr->hw.set_led(LedPattern::Connected);
+}
+
+void OceanPadApp::OceanPadHidCallbacks::on_disconnected(bool graceful) const {
+    if (!app_ptr) {
+        return;
+    }
+    if (graceful) {
+        app_ptr->hw.sleep();
+    } else {
+        app_ptr->start_advertising();
+    }
+}
+
+void OceanPadApp::OceanPadHidCallbacks::on_adv_timeout(bool discoverable) const {
+    if (!app_ptr) {
+        return;
+    }
+    if (discoverable) {
+        app_ptr->on_advertising_discoverable_timeout();
+    } else {
+        app_ptr->hw.sleep();
+    }
 }
