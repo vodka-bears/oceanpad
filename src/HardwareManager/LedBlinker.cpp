@@ -93,21 +93,14 @@ void LedBlinker::process() {
     switch (current_state) {
     case LedState::Static:
         apply_brightness(current_params.max_brightness);
-        k_work_reschedule(&work, K_MSEC(UPDATE_INTERVAL_MS)); // 50Hz for Vbat compensation
+        // Periodic Vbat compensation at a slow rate
+        k_work_reschedule(&work, K_MSEC(UPDATE_INTERVAL_STATIC_MS));
         return;
 
     case LedState::Rising:
         if (current_params.rise_ms > 0 && elapsed < current_params.rise_ms) {
             apply_brightness(calculate_fading(elapsed, current_params.rise_ms, true));
-            k_work_reschedule(&work, K_MSEC(UPDATE_INTERVAL_MS));
-            return;
-        }
-        break;
-
-    case LedState::Holding:
-        if (current_params.hold_ms > 0 && elapsed < current_params.hold_ms) {
-            apply_brightness(current_params.max_brightness);
-            k_work_reschedule(&work, K_MSEC(UPDATE_INTERVAL_MS));
+            k_work_reschedule(&work, K_MSEC(UPDATE_INTERVAL_DYNAMIC_MS));
             return;
         }
         break;
@@ -115,34 +108,42 @@ void LedBlinker::process() {
     case LedState::Falling:
         if (current_params.fall_ms > 0 && elapsed < current_params.fall_ms) {
             apply_brightness(calculate_fading(elapsed, current_params.fall_ms, false));
-            k_work_reschedule(&work, K_MSEC(UPDATE_INTERVAL_MS));
+            k_work_reschedule(&work, K_MSEC(UPDATE_INTERVAL_DYNAMIC_MS));
+            return;
+        }
+        break;
+
+    case LedState::Holding:
+        if (current_params.hold_ms > 0 && elapsed < current_params.hold_ms) {
+            apply_brightness(current_params.max_brightness);
+            // No need to update 50 times per second during a short hold
+            // Just sleep until the end of the phase
+            k_work_reschedule(&work, K_MSEC(current_params.hold_ms - elapsed));
             return;
         }
         break;
 
     case LedState::PulseGap:
     case LedState::BurstGap:
-    {        uint32_t gap_duration = (current_state == LedState::PulseGap) ?
+    {
+        uint32_t gap_duration = (current_state == LedState::PulseGap) ?
             current_params.pulse_delay_ms : current_params.burst_delay_ms;
 
         if (gap_duration > 0 && elapsed < gap_duration) {
             apply_brightness(current_params.min_brightness);
 
-            // Optimization: sleep until end of gap if LED is off (min_brightness == 0)
-            if (current_params.min_brightness == 0) {
-                k_work_reschedule(&work, K_MSEC(gap_duration - elapsed));
-            } else {
-                k_work_reschedule(&work, K_MSEC(UPDATE_INTERVAL_MS));
-            }
+            // Sleep until end of gap. Vbat compensation for min_brightness
+            // is usually unnecessary if it's 0 or very low.
+            k_work_reschedule(&work, K_MSEC(gap_duration - elapsed));
             return;
         }
         break;
     }
-    default: //off
+    default:
         break;
     }
 
-    // 2. Phase transition logic (triggered when current phase is complete or duration is 0)
+    // 2. Phase transition logic
     switch (current_state) {
     case LedState::Rising:
         transition_to(LedState::Holding);
@@ -173,53 +174,51 @@ void LedBlinker::transition_to(LedState next_state) {
     state_start_ms = k_uptime_get_32();
 
     uint8_t initial_br = 0;
-    uint32_t next_delay_ms = UPDATE_INTERVAL_MS;
+    uint32_t next_delay_ms = UPDATE_INTERVAL_DYNAMIC_MS;
     uint32_t phase_duration = 0;
 
     switch (current_state) {
-        case LedState::Static:
-            initial_br = current_params.max_brightness;
-            phase_duration = 1; // Prevent zero-length skip for Static
-            break;
+    case LedState::Static:
+        initial_br = current_params.max_brightness;
+        phase_duration = 1; // Dummy duration for logic bypass
+        next_delay_ms = UPDATE_INTERVAL_STATIC_MS;
+        break;
 
-        case LedState::Rising:
-            initial_br = current_params.min_brightness;
-            phase_duration = current_params.rise_ms;
-            break;
+    case LedState::Rising:
+        initial_br = current_params.min_brightness;
+        phase_duration = current_params.rise_ms;
+        next_delay_ms = UPDATE_INTERVAL_DYNAMIC_MS;
+        break;
 
-        case LedState::Holding:
-            initial_br = current_params.max_brightness;
-            phase_duration = current_params.hold_ms;
-            break;
+    case LedState::Holding:
+        initial_br = current_params.max_brightness;
+        phase_duration = current_params.hold_ms;
+        next_delay_ms = phase_duration; // Full sleep
+        break;
 
-        case LedState::Falling:
-            initial_br = current_params.max_brightness;
-            phase_duration = current_params.fall_ms;
-            break;
+    case LedState::Falling:
+        initial_br = current_params.max_brightness;
+        phase_duration = current_params.fall_ms;
+        next_delay_ms = UPDATE_INTERVAL_DYNAMIC_MS;
+        break;
 
-        case LedState::PulseGap:
-        case LedState::BurstGap:
-            initial_br = current_params.min_brightness;
-            phase_duration = (current_state == LedState::PulseGap) ?
-                              current_params.pulse_delay_ms : current_params.burst_delay_ms;
+    case LedState::PulseGap:
+    case LedState::BurstGap:
+        initial_br = current_params.min_brightness;
+        phase_duration = (current_state == LedState::PulseGap) ?
+                         current_params.pulse_delay_ms : current_params.burst_delay_ms;
+        next_delay_ms = phase_duration; // Full sleep
+        break;
 
-            // Optimization for zero brightness gaps
-            if (current_params.min_brightness == 0) {
-                next_delay_ms = phase_duration;
-            }
-            break;
-
-        case LedState::Off:
-            apply_brightness(0);
-            k_work_cancel_delayable(&work);
-            return;
+    case LedState::Off:
+        apply_brightness(0);
+        k_work_cancel_delayable(&work);
+        return;
     }
 
-    // Apply starting brightness of the new phase immediately
     apply_brightness(initial_br);
 
-    // Optimization: if phase duration is 0, skip directly to the next state transition
-    if (phase_duration == 0) {
+    if (phase_duration == 0 && current_state != LedState::Static) {
         process();
     } else {
         k_work_reschedule(&work, K_MSEC(next_delay_ms));

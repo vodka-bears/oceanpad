@@ -1,5 +1,4 @@
 #include "OceanPadApp.hpp"
-#include "hid_report_maps.hpp"
 #include <zephyr/logging/log.h>
 #include <zephyr/sys/reboot.h>
 #include <zephyr/settings/settings.h>
@@ -29,85 +28,14 @@ void OceanPadApp::run() {
 
 
     hw.get_state(gamepad_state);
-    xd_switch_was_on = gamepad_state.buttons.xd_switch;
+    identity_idx = hw.get_identity_idx();
 
-    LOG_DBG("X-D switch is %s", xd_switch_was_on ? "on" : "off");
+    LOG_DBG("Identity index: %d", identity_idx);
 
+    current_codec = oceanpad_config_variants[identity_idx].report_codec;
+    interval_us = oceanpad_config_variants[identity_idx].interval_us;
 
-    if (xd_switch_was_on) {
-        current_codec = &abitdo_codec;
-        interval_us = 8333;
-    } else {
-        current_codec = &xbox_codec;
-        interval_us = 7500;
-    }
-
-    static const DeviceInfo xbox_device_info {
-        .name = "Xbox Wireless Controller",
-        .appearance = 964,
-    };
-
-    static const DisConfig xbox_dis = {
-        .pnp_id = {
-            .src = 2,
-            .vid = 0x045E,
-            .pid = 0x0B13,
-            .ver = 0x0523,
-        },
-        .manufacturer = "Microsoft",
-        .model = NULL,
-        .serial = "18062023",
-        .fw_rev = "OceanPad",
-    };
-
-    static const ReportRef xbox_reports[2] = {
-        { 0x01, HidReportType::Input  },
-        { 0x03, HidReportType::Output  },
-    };
-
-    static const HidConfig xbox_hid = {
-        .report_map = report_map_xbox,
-        .report_map_size = ARRAY_SIZE(report_map_xbox),
-        .report_buf = xbox_reports,
-        .report_count = ARRAY_SIZE(xbox_reports),
-    };
-
-    static const DeviceInfo abitdo_device_info {
-        .name = "OceanPad",
-        .appearance = 964,
-    };
-
-    static const DisConfig abitdo_dis = {
-        .pnp_id = {
-            .src = 2,
-            .vid = 0x2DC8,
-            .pid = 0x6012,
-            .ver = 0x0001,
-        },
-        .manufacturer = "Vodka Bears",
-        .model = NULL,
-        .serial = "18062023",
-        .fw_rev = "OceanPad",
-    };
-
-    static const ReportRef abitdo_reports[2] = {
-        { 0x01, HidReportType::Input  },
-        { 0x05, HidReportType::Output  },
-    };
-
-    static const HidConfig abitdo_hid = {
-        .report_map = report_map_8bitdo,
-        .report_map_size = ARRAY_SIZE(report_map_8bitdo),
-        .report_buf = abitdo_reports,
-        .report_count = ARRAY_SIZE(abitdo_reports),
-    };
-
-    if (xd_switch_was_on) {
-        err = ble_service.init(&abitdo_device_info, &abitdo_dis, &abitdo_hid);
-    } else {
-        err = ble_service.init(&xbox_device_info, &xbox_dis, &xbox_hid);
-    }
-    LOG_DBG("ble_service.init returned %d", err);
+    err = ble_service.init(&oceanpad_config_variants[identity_idx]);
     if (err) {
         LOG_ERR("BLE init failed (err %d)", err);
         k_sleep(K_FOREVER);
@@ -121,18 +49,13 @@ void OceanPadApp::run() {
         k_sleep(K_FOREVER);
     }
 
-    if (xd_switch_was_on) {
-        err = ble_service.set_identity(1);
-    } else {
-
-    }
+    err = ble_service.set_identity(identity_idx);
     if (err) {
         LOG_ERR("Set identity failed (err %d)", err);
         k_sleep(K_FOREVER);
     }
 
     start_advertising();
-
 
     k_thread_create(&input_thread_data, input_stack, K_THREAD_STACK_SIZEOF(input_stack),
                     input_thread_fn, this, NULL, NULL,
@@ -156,7 +79,7 @@ void OceanPadApp::input_thread_fn(void *arg1, void *arg2, void *arg3) {
         app->input_loop();
         now = k_uptime_ticks();
         if (next_tick <= now) {
-            LOG_DBG("late by %lld", now - next_tick);
+            //LOG_DBG("late by %lld", now - next_tick);
             next_tick = now + interval_ticks;
         }
         k_sleep(K_TIMEOUT_ABS_TICKS(next_tick));
@@ -203,10 +126,10 @@ void OceanPadApp::system_loop() {
         LOG_DBG("Idle timeout, shutting down");
         hw.sleep();
     }
-    if (gamepad_state.buttons.xd_switch != xd_switch_was_on)
+    if (hw.get_identity_idx() != identity_idx)
     {
         ble_service.do_disconnect();
-        LOG_DBG("X-D Switch flipped, restarting");
+        LOG_DBG("Identity switched, restarting");
         hw.restart();
     }
 }
@@ -217,16 +140,30 @@ void OceanPadApp::handle_system_logic() {
             system_press_start = k_uptime_get();
         } else if (system_press_start > 0 && (k_uptime_get() - system_press_start >= LONG_PRESS_TIMEOUT_MS)) {
             if (gamepad_state.buttons.b) {
-                LOG_DBG("System+B: Calibration Mode Initialized");
+                LOG_DBG("Mode+B: Calibration Mode Initialized");
                 hw.start_calibration();
             } else if (gamepad_state.buttons.y) {
-                LOG_DBG("System+Y: Clearing bonded peers");
+                LOG_DBG("Mode+Y: Clearing bonded peers");
                 ble_service.clear_bonded_peers();
                 hw.restart();
             } else {
-                LOG_DBG("System Long Press: BT Pairing Mode");
-                ble_service.start_advertising(true);
-                hw.set_led(LedPattern::AdvertisingDiscoverable);
+                BleServiceState ble_state = ble_service.get_state();
+                if (ble_state == BleServiceState::AdvertisingDiscoverable || ble_state == BleServiceState::ConnectedAdvertising) {
+                    LOG_DBG("Mode Long Press: Stop advertsing discoverable");
+                    ble_service.stop_advertising();
+                    if (ble_service.get_state() == BleServiceState::AdvertisingUndiscoverable)
+                    {
+                        hw.set_led(LedPattern::AdvertisingDiscoverable);
+                    }
+                    else if (ble_service.get_state() == BleServiceState::Connected)
+                    {
+                        hw.set_led(LedPattern::Connected);
+                    }
+                } else {
+                    LOG_DBG("Mode Long Press: Advertsing discoverable");
+                    ble_service.start_advertising(true);
+                    hw.set_led(LedPattern::AdvertisingDiscoverable);
+                }
             }
             system_press_start = -1;
         }
@@ -282,10 +219,12 @@ bool OceanPadApp::is_state_idle(const GamepadState& gp_state) {
     btns_copy.xd_switch = 0;
     if (*(uint16_t*)(&btns_copy))
     {
+        //LOG_DBG("Buttons not idle");
         return false;
     }
     if (gp_state.dpad != DPadState::Centered)
     {
+        //LOG_DBG("Dpad not idle");
         return false;
     }
     auto abs = [](int16_t inp) -> uint16_t {
@@ -298,12 +237,14 @@ bool OceanPadApp::is_state_idle(const GamepadState& gp_state) {
         abs(gp_state.axes.stick_ry) > AXIS_ACTIVITY_THRESHOLD
     )
     {
+        //LOG_DBG("Sticks not idle");
         return false;
     }
     if (gp_state.axes.trigger_lt > AXIS_ACTIVITY_THRESHOLD ||
         gp_state.axes.trigger_rt > AXIS_ACTIVITY_THRESHOLD
     )
     {
+        //LOG_DBG("Triggers not idle");
         return false;
     }
     return true;

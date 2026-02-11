@@ -108,15 +108,15 @@ static const struct bt_data ad_undiscoverable[] = {
 };
 
 
-int BleService::init(const DeviceInfo* device_info, const DisConfig* dis, const HidConfig* hid) {
+int BleService::init(const DeviceConfig* device_config) {
     instance = this;
     int err = 0;
-    err = init_dis(dis);
+    err = init_dis(&device_config->dis_config);
     if (err) {
         LOG_ERR("Init DIS failed, err: %d", err);
         return err;
     }
-    err = init_hid(hid);
+    err = init_hid(&device_config->hid_config);
     if (err) {
         LOG_ERR("Init HID failed, err: %d", err);
         return err;
@@ -128,15 +128,15 @@ int BleService::init(const DeviceInfo* device_info, const DisConfig* dis, const 
         return err;
     }
 
-    err = bt_set_appearance(device_info->appearance);
+    err = bt_set_appearance(device_config->appearance);
     if (err) {
         LOG_ERR("Set appearance failed, err: %d", err);
         return err;
     }
 
-    if (device_info->name)
+    if (device_config->name)
     {
-        err = bt_set_name(device_info->name);
+        err = bt_set_name(device_config->name);
         if (err)
         {
             LOG_ERR("Set name failed, err: %d", err);
@@ -153,7 +153,7 @@ int BleService::init(const DeviceInfo* device_info, const DisConfig* dis, const 
                 return;
             }
             bt_conn_ref(conn);
-            LOG_DBG("Connected (ref captured). Waiting for security...");
+            //LOG_DBG("Connected (ref captured). Waiting for security...");
         },
 
         .disconnected = [](struct bt_conn *conn, uint8_t reason) {
@@ -183,21 +183,19 @@ int BleService::init(const DeviceInfo* device_info, const DisConfig* dis, const 
                 bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
                 return;
             }
-
-            LOG_DBG("Security changed: level %u", level);
-
             instance->exchange_params = {
                 [](struct bt_conn *conn, uint8_t err, struct bt_gatt_exchange_params *params)  {
-                    LOG_DBG("MTU exchange %s ", err == 0 ? "successful" : "failed");
-                    LOG_DBG("MTU size is: %d", bt_gatt_get_mtu(conn));
+                    //LOG_DBG("MTU exchange %s ", err == 0 ? "successful" : "failed");
+                    //LOG_DBG("MTU size is: %d", bt_gatt_get_mtu(conn));
                 },
             };
-            LOG_DBG("MTU size is: %d", bt_gatt_get_mtu(conn));
+            //LOG_DBG("MTU size is: %d", bt_gatt_get_mtu(conn));
             int mtu_err = bt_gatt_exchange_mtu(conn, &instance->exchange_params);
             if (mtu_err) {
                 LOG_ERR("MTU exchange failed (err %d)", mtu_err);
             } else {
-                LOG_DBG("MTU exchange pending");
+                k_sleep(K_MSEC(50)); //otherwise <wrn> bt_att: No ATT channel for MTU 36
+                //LOG_DBG("MTU exchange pending");
             }
 
             if (level >= BT_SECURITY_L2) {
@@ -212,6 +210,16 @@ int BleService::init(const DeviceInfo* device_info, const DisConfig* dis, const 
 
                 k_work_cancel_delayable(&instance->adv_timeout_work);
                 instance->hid_callbacks->on_connected();
+            }
+
+
+            struct bt_conn_info info;
+            if (bt_conn_get_info(conn, &info) == 0) {
+                char addr_str[BT_ADDR_LE_STR_LEN];
+                bt_addr_le_to_str(info.le.dst, addr_str, sizeof(addr_str));
+                LOG_DBG("Connected and authentificated: %s", addr_str);
+            } else {
+                LOG_ERR("Failed to get connection info");
             }
         },
     };
@@ -233,7 +241,7 @@ int BleService::init(const DeviceInfo* device_info, const DisConfig* dis, const 
     bt_conn_auth_info_cb_register(&auth_info_callbacks);
     k_work_init_delayable(&adv_timeout_work, on_adv_timeout);
     init_advertising();
-    LOG_DBG("BLE init finished");
+    //LOG_DBG("BLE init finished");
     return 0;
 }
 
@@ -360,7 +368,7 @@ int BleService::init_hid(const HidConfig* hid) {
 
     uint8_t ccc_idx = 0;
     for (uint8_t i = 0; i < report_count; i++) {
-        report_storage[i].ref = hid->report_buf[i];
+        report_storage[i].ref = hid->reports[i];
         report_storage[i].report_cache_len = 0;
 
         if (report_storage[i].ref.type == HidReportType::Input) {
@@ -428,6 +436,7 @@ int BleService::start_advertising(bool discoverable) {
         adv_param.id = current_bt_id;
 
         LOG_DBG("Advertising discoverable");
+        current_state = current_conn ? BleServiceState::ConnectedAdvertising : BleServiceState::AdvertisingDiscoverable;
         err = bt_le_adv_start(&adv_param, ad_discoverable, ARRAY_SIZE(ad_discoverable), sd, ARRAY_SIZE(sd));
     } else {
         bt_le_filter_accept_list_clear();
@@ -443,13 +452,30 @@ int BleService::start_advertising(bool discoverable) {
         );
         adv_param.id = current_bt_id;
         LOG_DBG("Advertising undiscoverable");
+        current_state = BleServiceState::AdvertisingUndiscoverable;
         err = bt_le_adv_start(&adv_param, ad_undiscoverable, ARRAY_SIZE(ad_undiscoverable), nullptr, 0);
     }
     if (err) {
         LOG_ERR("Failed to begin adverising, err %d", err);
     } else {
-        current_state = BleServiceState::AdvertisingUndiscoverable;
+
         k_work_reschedule(&adv_timeout_work, K_SECONDS(ADV_TIMEOUT_S));
+    }
+    return err;
+}
+
+int BleService::stop_advertising() {
+    int err = 0;
+    if (current_state == BleServiceState::AdvertisingDiscoverable) {
+        LOG_DBG("Aborting discoverable adverising while disconnected");
+        err = start_advertising(false);
+    } else if (current_state == BleServiceState::ConnectedAdvertising) {
+        LOG_DBG("Aborting discoverable adverising while connected");
+        err = bt_le_adv_stop();
+        current_state = BleServiceState::Connected;
+    } else {
+        LOG_WRN("Not adverising discoverable but function called");
+        err = -EINVAL;
     }
     return err;
 }

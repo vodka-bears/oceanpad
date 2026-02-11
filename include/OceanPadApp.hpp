@@ -1,8 +1,7 @@
 #pragma once
 #include "HardwareManager/HardwareManager.hpp"
-#include "ReportCodec/ReportCodecXbox.hpp"
-#include "ReportCodec/ReportCodec8BitDo.hpp"
 #include "BleService.hpp"
+#include "DeviceConfig.hpp"
 
 class OceanPadApp {
 public:
@@ -24,6 +23,8 @@ private:
     static bool is_state_idle(const GamepadState& gp_state);
 
     void handle_incoming_report(uint8_t report_id, const uint8_t* data, uint16_t len);
+
+    int identity_idx{ 0 };
 
     HardwareManager hw;
 

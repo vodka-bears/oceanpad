@@ -5,6 +5,8 @@
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/kernel.h>
 
+#include "DeviceConfig.hpp"
+
 #define MAX_REPORTS 8
 #define MAX_REPORT_LEN CONFIG_BT_L2CAP_TX_MTU - 3
 
@@ -16,49 +18,11 @@ enum class BleServiceState : uint8_t {
     ConnectedAdvertising,
 };
 
-struct PnpID {
-    uint8_t  src;
-    uint16_t vid;
-    uint16_t pid;
-    uint16_t ver;
-}  __packed;
-
-struct DisConfig {
-    PnpID pnp_id;
-    const char* manufacturer;
-    const char* model;
-    const char* serial;
-    const char* fw_rev;
-};
-
-enum class HidReportType : uint8_t {
-    Input = 0x01,
-    Output = 0x02,
-    Feature = 0x03,
-};
-
-struct ReportRef {
-    uint8_t id;
-    HidReportType type;
-} __packed;
-
 struct ReportTableEntry {
     ReportRef ref;
     uint8_t attr_idx;
     uint8_t report_cache[MAX_REPORT_LEN];
     uint8_t report_cache_len;
-};
-
-struct HidConfig {
-    const uint8_t* report_map;
-    size_t report_map_size;
-    const ReportRef* report_buf;
-    uint8_t report_count;
-};
-
-struct DeviceInfo {
-    const char* name;
-    uint16_t appearance;
 };
 
 class HidServiceCallbacks {
@@ -71,12 +35,13 @@ public:
 
 class BleService {
 public:
-    int init(const DeviceInfo* device_info, const DisConfig* dis, const HidConfig* hid);
+    int init(const DeviceConfig* device_config);
     int set_identity(uint8_t bt_id);
 
     void set_callbacks(const HidServiceCallbacks* new_callbacks) { hid_callbacks = new_callbacks; }
 
     int start_advertising(bool discoverable);
+    int stop_advertising();
     int update_report(uint8_t report_id, const uint8_t* data, uint16_t len);
     int update_battery_level(uint8_t level);
 

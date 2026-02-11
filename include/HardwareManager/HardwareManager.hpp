@@ -23,6 +23,8 @@ public:
     int init();
     int update();
 
+    int get_identity_idx();
+
     void get_state(GamepadState& state);
 
     void set_vibration(const VibrationDataXbox& vibr_d);
@@ -55,9 +57,9 @@ private:
     GamepadState gamepad_state;
     RawData raw_data;
 
-    static inline const uint16_t MIN_VOLTAGE = 2150;
+    static constexpr uint16_t MIN_VOLTAGE = 2150;
 
-    static constexpr LedPwmParams LED_SEQ_CALIB {
+    static inline const LedPwmParams LED_SEQ_CALIB {
         .min_brightness = 0,
         .max_brightness = 255,
         .rise_ms = 0,
@@ -68,7 +70,7 @@ private:
         .pulses_per_burst = 3,
     };
 
-    static constexpr LedPwmParams LED_SEQ_ADV_DISCO {
+    static inline const LedPwmParams LED_SEQ_ADV_DISCO {
         .min_brightness = 0,
         .max_brightness = 255,
         .rise_ms = 200,
@@ -79,7 +81,7 @@ private:
         .pulses_per_burst = 1,
     };
 
-    static constexpr LedPwmParams LED_SEQ_ADV_UNDISCO {
+    static inline const LedPwmParams LED_SEQ_ADV_UNDISCO {
         .min_brightness = 0,
         .max_brightness = 255,
         .rise_ms = 200,

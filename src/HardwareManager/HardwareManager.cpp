@@ -115,6 +115,10 @@ int HardwareManager::update() {
     return 0;
 }
 
+int HardwareManager::get_identity_idx() {
+    return gamepad_state.buttons.xd_switch ? 1 : 0;
+}
+
 void HardwareManager::get_state(GamepadState& state) {
     k_mutex_lock(&data_mutex, K_FOREVER);
     state = gamepad_state;

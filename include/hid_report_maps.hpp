@@ -1,6 +1,6 @@
 #pragma once
 
-uint8_t report_map_xbox[] = {
+static constexpr uint8_t report_map_xbox[] = {
   0x05, 0x01,                   // Usage Page (Generic Desktop Ctrls)
   0x09, 0x05,                   // Usage (Game Pad)
   0xA1, 0x01,                   // Collection (Application)
@@ -139,7 +139,7 @@ uint8_t report_map_xbox[] = {
   0xC0,                         // End Collection
 };
 
-uint8_t report_map_8bitdo[] = {
+static constexpr uint8_t report_map_8bitdo[] = {
   0x05, 0x01,        // Usage Page (Generic Desktop Ctrls)
   0x09, 0x05,        // Usage (Game Pad)
   0xA1, 0x01,        // Collection (Application)

@@ -23,7 +23,8 @@ public:
     void set_brightness(uint8_t value); // Manual override
     void set_vbat(uint16_t new_vbat);
 private:
-    static inline const uint32_t UPDATE_INTERVAL_MS = 20; // 50Hz update rate for smooth fading
+    static inline const uint32_t UPDATE_INTERVAL_DYNAMIC_MS = 20; // 50Hz update rate for smooth fading
+    static inline const uint32_t UPDATE_INTERVAL_STATIC_MS = 1000; // 1Hz update rate for static phases
     static inline const uint32_t VOLTAGE_MAX = 1800;
     static inline const uint32_t VOLTAGE_MIN = 1200;
 
