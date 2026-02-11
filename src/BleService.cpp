@@ -371,7 +371,6 @@ int BleService::init_hid(const HidConfig* hid) {
             report_storage[i].attr_idx = h_idx - 1;
             hids_ccc_pool[ccc_idx] = BT_GATT_CCC_MANAGED_USER_DATA_INIT(NULL, NULL, NULL);
             hids_attrs[h_idx++] = BT_GATT_CCC_MANAGED(&hids_ccc_pool[ccc_idx++], BT_GATT_PERM_READ_LESC | BT_GATT_PERM_WRITE_LESC);
-            ccc_idx++;
         }
         else {
             add_characteristic(hids_attrs, h_idx, hids_chrcs, h_c_idx,
