@@ -336,7 +336,7 @@ int BleService::init_dis(const DisConfig* dis) {
 }
 
 int BleService::init_hid(const HidConfig* hid) {
-    if (!dis) {
+    if (!hid) {
         LOG_ERR("hid is NULL!");
         return -EINVAL;
     }
