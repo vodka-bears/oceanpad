@@ -109,6 +109,10 @@ static const struct bt_data ad_undiscoverable[] = {
 
 
 int BleService::init(const DeviceConfig* device_config) {
+    if (instance != nullptr) {
+        LOG_ERR("BleService already initialized!");
+        return -EALREADY;
+    }
     instance = this;
     int err = 0;
     err = init_dis(&device_config->dis_config);
