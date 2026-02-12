@@ -6,6 +6,7 @@ int InputProcessor::init() {
     if (err) {
         return err;
     }
+    imu_calibrator.start_calibration();
     return 0;
 }
 
