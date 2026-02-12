@@ -7,13 +7,11 @@
 
 LOG_MODULE_REGISTER(HardwareManager, LOG_LEVEL_DBG);
 
-HardwareManager::HardwareManager() {
-    k_mutex_init(&data_mutex);
-    memset(&gamepad_state, 0, sizeof(gamepad_state));
-}
-
 int HardwareManager::init() {
     int err = 0;
+
+    memset(&gamepad_state, 0, sizeof(gamepad_state));
+    k_mutex_init(&data_mutex);
 
     err = gpio_pin_configure_dt(&axes_pwr, GPIO_OUTPUT_ACTIVE);
     if (err) {
@@ -46,13 +44,6 @@ int HardwareManager::init() {
         return err;
     }
 
-    err = input_processor.init();
-    if (err)
-    {
-        LOG_ERR("Failed to setup input processor, err %d", err);
-        return err;
-    }
-
     err = motor_vibrator.init();
     if (err)
     {
@@ -71,6 +62,13 @@ int HardwareManager::init() {
     if (err)
     {
         LOG_ERR("Failed to read raw data, err %d", err);
+        return err;
+    }
+
+    err = input_processor.init(raw_data.native_buttons.xd_switch);
+    if (err)
+    {
+        LOG_ERR("Failed to setup input processor, err %d", err);
         return err;
     }
 
@@ -109,6 +107,10 @@ int HardwareManager::update() {
         }
         return 0;
     }
+    if (imu_calibration_started && !input_processor.is_imu_calibration()) {
+        imu_calibration_started = false;
+        set_led(saved_led_pattern);
+    }
     k_mutex_lock(&data_mutex, K_FOREVER);
     gamepad_state = new_state;
     k_mutex_unlock(&data_mutex);
@@ -141,15 +143,29 @@ void HardwareManager::set_led(LedPattern led_pattern) {
         led_blinker.start_sequence(LED_SEQ_ADV_DISCO);
         break;
     }
+    saved_led_pattern = led_pattern;
 }
 
 uint8_t HardwareManager::get_battery_percent() {
     return gamepad_state.battery_percent;
 }
 
-void HardwareManager::start_calibration() {
-    input_processor.start_axes_calibration();
-    led_blinker.start_sequence(LED_SEQ_CALIB);
+void HardwareManager::start_calibration(int stage) {
+    switch (stage) {
+    case 0:
+        input_processor.start_axes_calibration();
+        led_blinker.start_sequence(LED_SEQ_AXES_CALIB);
+        break;
+    case 1:
+        if (get_identity_idx() == 0) {
+            break;
+        }
+        input_processor.start_imu_calibration();
+        led_blinker.start_sequence(LED_SEQ_IMU_CALIB);
+        imu_calibration_started = true;
+        break;
+    }
+
 }
 
 bool HardwareManager::is_calibration() {

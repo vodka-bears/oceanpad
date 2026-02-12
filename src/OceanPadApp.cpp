@@ -90,7 +90,7 @@ void OceanPadApp::system_thread_fn(void *arg1, void *arg2, void *arg3) {
     auto *app = static_cast<OceanPadApp *>(arg1);
     while (true) {
         app->system_loop();
-        k_msleep(500);
+        k_msleep(250);
     }
 
 }
@@ -140,12 +140,20 @@ void OceanPadApp::handle_system_logic() {
             system_press_start = k_uptime_get();
         } else if (system_press_start > 0 && (k_uptime_get() - system_press_start >= LONG_PRESS_TIMEOUT_MS)) {
             if (gamepad_state.buttons.b) {
-                LOG_DBG("Mode+B: Calibration Mode Initialized");
-                hw.start_calibration();
+                LOG_DBG("Mode+B: Axes calibration");
+                hw.start_calibration(0);
             } else if (gamepad_state.buttons.y) {
                 LOG_DBG("Mode+Y: Clearing bonded peers");
                 ble_service.clear_bonded_peers();
                 hw.restart();
+            } else if (gamepad_state.buttons.x) {
+                if (hw.get_identity_idx() == 1) {
+                    LOG_DBG("Mode+X: Gyro calibration");
+                    hw.start_calibration(1);
+                }
+                else {
+                    LOG_DBG("Mode+X: Gyro calibration only available for IMU enabled mode");
+                }
             } else {
                 BleServiceState ble_state = ble_service.get_state();
                 if (ble_state == BleServiceState::AdvertisingDiscoverable || ble_state == BleServiceState::ConnectedAdvertising) {

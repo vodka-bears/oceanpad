@@ -8,12 +8,15 @@
 
 class InputProcessor final {
 public:
-    int init();
+    int init(bool init_imu);
     void process_raw_data(GamepadState& gamepad_state, const RawData& raw_data);
 
     bool is_axes_calibration();
     void start_axes_calibration();
     bool is_ready_to_reboot_after_calibration() const { return reboot_after_calibration_flag; }
+
+    bool is_imu_calibration();
+    void start_imu_calibration();
 private:
     ButtonProcessor button_processor;
     AxesCalibrator axes_calibrator;

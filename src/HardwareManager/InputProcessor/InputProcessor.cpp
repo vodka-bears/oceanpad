@@ -1,12 +1,14 @@
 #include "HardwareManager/InputProcessor/InputProcessor.hpp"
 
-int InputProcessor::init() {
+int InputProcessor::init(bool init_imu) {
     int err = 0;
     err = axes_calibrator.init();
     if (err) {
         return err;
     }
-    imu_calibrator.start_calibration();
+    if (init_imu) {
+        imu_calibrator.start_calibration();
+    }
     return 0;
 }
 
@@ -33,4 +35,12 @@ bool InputProcessor::is_axes_calibration() {
 
 void InputProcessor::start_axes_calibration() {
     axes_calibrator.start_calibration();
+}
+
+bool InputProcessor::is_imu_calibration() {
+    return imu_calibrator.is_calibration();
+}
+
+void InputProcessor::start_imu_calibration() {
+    imu_calibrator.start_calibration();
 }

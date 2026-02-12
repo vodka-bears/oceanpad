@@ -18,8 +18,6 @@ enum class LedPattern : uint8_t {
 
 class HardwareManager final {
 public:
-    HardwareManager();
-
     int init();
     int update();
 
@@ -33,7 +31,7 @@ public:
 
     uint8_t get_battery_percent();
 
-    void start_calibration();
+    void start_calibration(int stage);
     bool is_calibration();
 
     void restart();
@@ -51,15 +49,18 @@ private:
 
     MotorVibrator motor_vibrator;
     LedBlinker led_blinker;
+
     bool ignore_led{ false };
     bool shutdown{ false };
+    bool imu_calibration_started{ false };
+    LedPattern saved_led_pattern{ LedPattern::AdvertisingUndiscoverable };
 
     GamepadState gamepad_state;
     RawData raw_data;
 
     static constexpr uint16_t MIN_VOLTAGE = 2150;
 
-    static inline const LedPwmParams LED_SEQ_CALIB {
+    static inline const LedPwmParams LED_SEQ_AXES_CALIB {
         .min_brightness = 0,
         .max_brightness = 255,
         .rise_ms = 0,
@@ -68,6 +69,17 @@ private:
         .pulse_delay_ms = 0,
         .burst_delay_ms = 500,
         .pulses_per_burst = 3,
+    };
+
+    static inline const LedPwmParams LED_SEQ_IMU_CALIB {
+        .min_brightness = 0,
+        .max_brightness = 255,
+        .rise_ms = 333,
+        .hold_ms = 0,
+        .fall_ms = 0,
+        .pulse_delay_ms = 0,
+        .burst_delay_ms = 333,
+        .pulses_per_burst = 1,
     };
 
     static inline const LedPwmParams LED_SEQ_ADV_DISCO {
