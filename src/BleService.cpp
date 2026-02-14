@@ -60,19 +60,17 @@ ssize_t BleService::read_report_map_cb(struct bt_conn *conn, const struct bt_gat
 
 ssize_t BleService::read_report_cb(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                                        void *buf, uint16_t len, uint16_t offset) {
-
     ReportTableEntry* entry = static_cast<ReportTableEntry*>(attr->user_data);
     if (!entry) {
-        LOG_ERR("Filed to read report %d", entry->ref.id);
-        return -EINVAL;
+        return -BT_ATT_ERR_UNLIKELY;
     }
-
+    if (offset != 0) {
+        LOG_ERR("Fragmented reports are not supported (offset %u)", offset);
+        return -BT_ATT_ERR_INVALID_OFFSET;
+    }
     ssize_t read_len;
     k_mutex_lock(&instance->report_mutex, K_FOREVER);
-
-    read_len = bt_gatt_attr_read(conn, attr, buf, len, offset,
-                                 entry->report_cache, entry->report_cache_len);
-
+    read_len = bt_gatt_attr_read(conn, attr, buf, len, offset, entry->report_cache, entry->report_cache_len);
     k_mutex_unlock(&instance->report_mutex);
     return read_len;
 }
@@ -80,19 +78,24 @@ ssize_t BleService::read_report_cb(struct bt_conn *conn, const struct bt_gatt_at
 ssize_t BleService::write_report_cb(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                                           const void *buf, uint16_t len, uint16_t offset, uint8_t flags) {
    ReportTableEntry* entry = static_cast<ReportTableEntry*>(attr->user_data);
-
-    if (!entry) return -EINVAL;
-    if (offset + len > MAX_REPORT_LEN) return -BT_ATT_ERR_INVALID_OFFSET;
-
+    if (!entry) {
+        return -BT_ATT_ERR_UNLIKELY;
+    }
+    if (offset != 0) {
+        LOG_ERR("Fragmented reports are not supported (offset %u)", offset);
+        return -BT_ATT_ERR_INVALID_OFFSET;
+    }
+    if (len > MAX_REPORT_LEN) {
+        LOG_ERR("Report too large for cache (%u > %d)", len, MAX_REPORT_LEN);
+        return -BT_ATT_ERR_INVALID_ATTRIBUTE_LEN;
+    }
     k_mutex_lock(&instance->report_mutex, K_FOREVER);
-
-    memcpy(entry->report_cache + offset, buf, len);
-    entry->report_cache_len = offset + len;
-
+    memcpy(entry->report_cache, buf, len);
+    entry->report_cache_len = len;
     k_mutex_unlock(&instance->report_mutex);
-
-    instance->hid_callbacks->on_incoming_report(entry->ref.id, (const uint8_t*)buf, len);
-
+    if (instance->hid_callbacks) {
+        instance->hid_callbacks->on_incoming_report(entry->ref.id, entry->report_cache, entry->report_cache_len);
+    }
     return len;
 }
 
@@ -571,7 +574,7 @@ int BleService::update_battery_level(uint8_t level) {
     int err = bt_gatt_notify(current_conn, &bas_svc.attrs[1], &last_battery_level, sizeof(last_battery_level));
 
     if (!err) {
-        LOG_DBG("Battery level updated: %u%%", level);
+        //LOG_DBG("Battery level updated: %u%%", level);
     }
     else {
         LOG_ERR("Battery level update err: %d", err);
