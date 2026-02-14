@@ -28,6 +28,8 @@ struct DigitalButtons {
     uint16_t vibr  : 1;
 
     uint16_t xd_switch : 1;
+
+    uint16_t pad : 2;
 };
 
 enum class DPadState : uint8_t {

@@ -21,6 +21,8 @@ void ButtonProcessor::process_raw_buttons(DigitalButtons& buttons, DPadState& dp
 
     buttons.xd_switch = native_buttons.xd_switch;
 
+    buttons.pad = 0;
+
     if (expander_buttons.dpad_up && !expander_buttons.dpad_right && !expander_buttons.dpad_down && !expander_buttons.dpad_left) {
         dpad = DPadState::Up;
     } else if (expander_buttons.dpad_up && expander_buttons.dpad_right && !expander_buttons.dpad_down && !expander_buttons.dpad_left) {
