@@ -17,6 +17,16 @@ ssize_t BleService::read_battery_level_cb(struct bt_conn *conn, const struct bt_
     return bt_gatt_attr_read(conn, attr, buf, len, offset, &lvl, sizeof(lvl));
 }
 
+void BleService::battery_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value) {
+    if (value == BT_GATT_CCC_NOTIFY) {
+        LOG_DBG("BAS notifications enabled");
+        instance->battery_notify_enable = true;
+    } else {
+        LOG_DBG("BAS notifications disabled");
+        instance->battery_notify_enable = false;
+    }
+}
+
 ssize_t BleService::read_dis_pnp_id(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                                    void *buf, uint16_t len, uint16_t offset) {
     if (!attr->user_data) {
@@ -98,14 +108,8 @@ BT_GATT_SERVICE_DEFINE(bas_svc,
                            BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
                            BT_GATT_PERM_READ,
                            BleService::read_battery_level_cb, NULL, NULL),
-    BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE),
+    BT_GATT_CCC(BleService::battery_ccc_cfg_changed, BT_GATT_PERM_READ_LESC | BT_GATT_PERM_WRITE_LESC),
 );
-
-
-static const struct bt_data ad_undiscoverable[] = {
-    BT_DATA_BYTES(BT_DATA_FLAGS, 0),
-    BT_DATA_BYTES(BT_DATA_UUID16_ALL, BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL)),
-};
 
 
 int BleService::init(const DeviceConfig* device_config) {
@@ -167,7 +171,7 @@ int BleService::init(const DeviceConfig* device_config) {
                 bt_conn_unref(instance->current_conn);
                 instance->current_conn = nullptr;
                 instance->current_state = BleServiceState::Idle;
-
+                LOG_DBG("Unrefed current conn");
                 if (reason == BT_HCI_ERR_REMOTE_USER_TERM_CONN) { //graceful disconnect
                     instance->hid_callbacks->on_disconnected(true);
                 } else if (reason == BT_HCI_ERR_LOCALHOST_TERM_CONN) { //disonnect by device, usually before poweroff
@@ -175,8 +179,10 @@ int BleService::init(const DeviceConfig* device_config) {
                 } else { //any other reason
                     instance->hid_callbacks->on_disconnected(false);
                 }
+
             } else {
                 bt_conn_unref(conn);
+                LOG_DBG("Unrefed unneeded conn");
                 instance->restart_advertising();
             }
         },
@@ -187,35 +193,39 @@ int BleService::init(const DeviceConfig* device_config) {
                 bt_conn_disconnect(conn, BT_HCI_ERR_AUTH_FAIL);
                 return;
             }
+
+            if (level < BT_SECURITY_L2) {
+                return;
+            }
+
+            if (instance->current_conn != nullptr && instance->current_conn != conn) {
+                LOG_DBG("Replacing old connection with new bonded peer");
+                bt_conn_disconnect(instance->current_conn, BT_HCI_ERR_LOCALHOST_TERM_CONN);
+                //bt_conn_unref(instance->current_conn);
+            }
+
+            instance->current_conn = conn;
+            instance->current_state = BleServiceState::Connected;
+            instance->mtu_negotiated = false;
+
+            k_work_cancel_delayable(&instance->adv_timeout_work);
+
             instance->exchange_params = {
                 [](struct bt_conn *conn, uint8_t err, struct bt_gatt_exchange_params *params)  {
-                    //LOG_DBG("MTU exchange %s ", err == 0 ? "successful" : "failed");
-                    //LOG_DBG("MTU size is: %d", bt_gatt_get_mtu(conn));
+                    LOG_DBG("MTU exchange is %s, size: %d", err == 0 ? "successful" : "failed", bt_gatt_get_mtu(conn));
+                    instance->mtu_negotiated = true;
                 },
             };
             //LOG_DBG("MTU size is: %d", bt_gatt_get_mtu(conn));
             int mtu_err = bt_gatt_exchange_mtu(conn, &instance->exchange_params);
-            if (mtu_err) {
-                LOG_ERR("MTU exchange failed (err %d)", mtu_err);
+            if (mtu_err == 0) {
+                LOG_DBG("MTU exchange is pending, size: %d", bt_gatt_get_mtu(conn));
+            } else if (mtu_err == -EALREADY) {
+                LOG_DBG("MTU exchange is already performed, size: %d", bt_gatt_get_mtu(conn));
+                instance->mtu_negotiated = true;
             } else {
-                k_sleep(K_MSEC(50)); //otherwise <wrn> bt_att: No ATT channel for MTU 36
-                //LOG_DBG("MTU exchange pending");
+                LOG_ERR("MTU exchange failed (err %d)", mtu_err);
             }
-
-            if (level >= BT_SECURITY_L2) {
-                if (instance->current_conn != nullptr && instance->current_conn != conn) {
-                    LOG_DBG("Replacing old connection with new bonded peer");
-                    bt_conn_disconnect(instance->current_conn, BT_HCI_ERR_AUTH_FAIL);
-                    bt_conn_unref(instance->current_conn);
-                }
-
-                instance->current_conn = conn;
-                instance->current_state = BleServiceState::Connected;
-
-                k_work_cancel_delayable(&instance->adv_timeout_work);
-                instance->hid_callbacks->on_connected();
-            }
-
 
             struct bt_conn_info info;
             if (bt_conn_get_info(conn, &info) == 0) {
@@ -225,6 +235,7 @@ int BleService::init(const DeviceConfig* device_config) {
             } else {
                 LOG_ERR("Failed to get connection info");
             }
+            instance->hid_callbacks->on_connected();
         },
     };
     bt_conn_cb_register(&conn_callbacks);
@@ -250,44 +261,71 @@ int BleService::init(const DeviceConfig* device_config) {
 }
 
 int BleService::set_identity(uint8_t bt_id) {
-    current_bt_id = bt_id;
-    if (current_bt_id > 0) {
-        bt_addr_le_t base_addr;
-        size_t count = 1;
+    bt_le_adv_stop();
 
-        bt_id_get(&base_addr, &count);
+    bt_addr_le_t addrs[CONFIG_BT_ID_MAX];
+    size_t count = CONFIG_BT_ID_MAX;
 
-        //LOG_HEXDUMP_DBG(base_addr.a.val, 6, "Current mac: ");
+    bt_id_get(addrs, &count);
 
-        uint32_t carry = current_bt_id;
-        for (int i = 0; i < 6; i++) {
-            uint32_t val = base_addr.a.val[i] + carry;
-            base_addr.a.val[i] = (uint8_t)val;
-            carry = val >> 8;
-            if (carry == 0) break;
+    bt_addr_le_t target_addr = addrs[0];
+
+    char addr_str[BT_ADDR_LE_STR_LEN];
+
+    uint32_t carry = bt_id;
+    for (int i = 0; i < 6; i++) {
+        uint32_t val = target_addr.a.val[i] + carry;
+        target_addr.a.val[i] = (uint8_t)val;
+        carry = val >> 8;
+        if (carry == 0) {
+            break;
         }
-
-        base_addr.type = BT_ADDR_LE_RANDOM;
-        base_addr.a.val[5] |= 0xC0;
-
-        //LOG_HEXDUMP_DBG(base_addr.a.val, 6, "New mac: ");
-
-        int id_ret = bt_id_create(&base_addr, NULL);
-        if (id_ret < 0) {
-            if (id_ret == -EALREADY) {
-                return 0;
-            } else {
-                LOG_ERR("Failed to create identity %d (err %d). Check CONFIG_BT_ID_MAX.", current_bt_id, id_ret);
-                return id_ret;
-            }
-        } else {
-            if (id_ret != current_bt_id) {
-                LOG_WRN("Identity created with index %d, but %d was requested", id_ret, current_bt_id);
-                current_bt_id = (uint8_t)id_ret;
-            }
-        }
-        return 0;
     }
+    target_addr.type = BT_ADDR_LE_RANDOM;
+    target_addr.a.val[5] |= 0xC0;
+
+    bt_addr_le_to_str(&target_addr, addr_str, BT_ADDR_LE_STR_LEN);
+    LOG_DBG("Target addr %s for id %d", addr_str, bt_id);
+
+    bool identity_found = false;
+
+    for (size_t i = 0; i < count; i++) {
+        bt_addr_le_to_str(&addrs[i], addr_str, BT_ADDR_LE_STR_LEN);
+        LOG_DBG("Identity with addr %s at id %d", addr_str, i);
+        if (bt_addr_le_cmp(&addrs[i], &target_addr) == 0) {
+            current_bt_id = i;
+            bt_addr_le_to_str(&addrs[i], addr_str, BT_ADDR_LE_STR_LEN);
+            LOG_DBG("Identity with addr %s for id %d found, switching", addr_str, bt_id);
+            identity_found = true;
+            break;
+        }
+    }
+
+    if (!identity_found) {
+        if (count == CONFIG_BT_ID_MAX) {
+            LOG_WRN("Identity not found and storage is full, clearing them all but 0");
+            for (size_t i = count - 1; i > 0; i--) {
+                int del_err = bt_unpair(i, BT_ADDR_LE_ANY);
+                if (del_err) {
+                    LOG_ERR("Failed to clear bonded peers ofidentity %d, err %d", i, del_err);
+                }
+                del_err = bt_id_delete(i);
+                if (del_err) {
+                    LOG_ERR("Failed to delete identity %d, err %d", i, del_err);
+                }
+            }
+        }
+
+        int id_ret = bt_id_create(&target_addr, NULL);
+        if (id_ret < 0) {
+            LOG_ERR("Failed to create identity %d (err %d). Check CONFIG_BT_ID_MAX.", bt_id, id_ret);
+            return id_ret;
+        }
+        current_bt_id = (uint8_t)id_ret;
+        LOG_DBG("Created identity with addr for id %d", bt_id);
+    }
+    adv_param_discoverable.id = current_bt_id;
+    adv_param_undiscoverable.id = current_bt_id;
     return 0;
 }
 
@@ -406,63 +444,36 @@ int BleService::init_hid(const HidConfig* hid) {
 }
 
 void BleService::init_advertising() {
-    static const uint8_t adv_flags = BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR;
-    static const uint8_t uuids[] = {
-        BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL),
-        BT_UUID_16_ENCODE(BT_UUID_DIS_VAL),
-        BT_UUID_16_ENCODE(BT_UUID_BAS_VAL)
-    };
-
-    ad_discoverable[0].type = BT_DATA_FLAGS;
-    ad_discoverable[0].data_len = 1;
-    ad_discoverable[0].data = &adv_flags;
-
     appearance = bt_get_appearance();
-    ad_discoverable[1].type = BT_DATA_GAP_APPEARANCE;
-    ad_discoverable[1].data_len = sizeof(appearance);
-    ad_discoverable[1].data = (const uint8_t *)&appearance;
-
-    ad_discoverable[2].type = BT_DATA_UUID16_ALL;
-    ad_discoverable[2].data_len = sizeof(uuids);
-    ad_discoverable[2].data = uuids;
+    ad_discoverable[2].type = BT_DATA_GAP_APPEARANCE;
+    ad_discoverable[2].data_len = sizeof(appearance);
+    ad_discoverable[2].data = (const uint8_t *)&appearance;
 
     const char* name = bt_get_name();
-    sd[0].type = BT_DATA_NAME_COMPLETE;
-    sd[0].data_len = (uint8_t)strlen(name);
-    sd[0].data = (const uint8_t *)name;
+    sd_discoverable[0].type = BT_DATA_NAME_COMPLETE;
+    sd_discoverable[0].data_len = (uint8_t)strlen(name);
+    sd_discoverable[0].data = (const uint8_t *)name;
 }
 
 int BleService::start_advertising(bool discoverable) {
     bt_le_adv_stop();
     int err = 0;
     if (discoverable) {
-        struct bt_le_adv_param adv_param = *BT_LE_ADV_CONN_FAST_1;
-        adv_param.id = current_bt_id;
-
         LOG_DBG("Advertising discoverable");
         current_state = current_conn ? BleServiceState::ConnectedAdvertising : BleServiceState::AdvertisingDiscoverable;
-        err = bt_le_adv_start(&adv_param, ad_discoverable, ARRAY_SIZE(ad_discoverable), sd, ARRAY_SIZE(sd));
+        err = bt_le_adv_start(&adv_param_discoverable, ad_discoverable, ARRAY_SIZE(ad_discoverable), sd_discoverable, ARRAY_SIZE(sd_discoverable));
     } else {
         bt_le_filter_accept_list_clear();
         bt_foreach_bond(current_bt_id, [](const struct bt_bond_info *info, void *) {
                 bt_le_filter_accept_list_add(&info->addr);
             }, nullptr);
-
-        struct bt_le_adv_param adv_param = BT_LE_ADV_PARAM_INIT(
-            BT_LE_ADV_OPT_CONN | BT_LE_ADV_OPT_FILTER_CONN | BT_LE_ADV_OPT_FILTER_SCAN_REQ,
-            BT_GAP_ADV_FAST_INT_MIN_1,
-            BT_GAP_ADV_FAST_INT_MAX_1,
-            nullptr
-        );
-        adv_param.id = current_bt_id;
         LOG_DBG("Advertising undiscoverable");
         current_state = BleServiceState::AdvertisingUndiscoverable;
-        err = bt_le_adv_start(&adv_param, ad_undiscoverable, ARRAY_SIZE(ad_undiscoverable), nullptr, 0);
+        err = bt_le_adv_start(&adv_param_undiscoverable, ad_undiscoverable, ARRAY_SIZE(ad_undiscoverable), nullptr, 0);
     }
     if (err) {
         LOG_ERR("Failed to begin adverising, err %d", err);
     } else {
-
         k_work_reschedule(&adv_timeout_work, K_SECONDS(ADV_TIMEOUT_S));
     }
     return err;
@@ -521,14 +532,20 @@ int BleService::update_report(uint8_t report_id, const uint8_t* data, uint16_t l
 
     memcpy(report_entry->report_cache, data, report_entry->report_cache_len);
     k_mutex_unlock(&report_mutex);
-    if (report_entry->ref.type == HidReportType::Input) {
+    if (report_entry->ref.type == HidReportType::Input && mtu_negotiated) {
         return bt_gatt_notify(current_conn, &hids_svc.attrs[report_entry->attr_idx], data, len);
+    }
+    if (report_entry->ref.type == HidReportType::Input && !mtu_negotiated) {
+        LOG_DBG("MTU not yet negotiated, skipping for now");
     }
     return 0;
 }
 
 int BleService::update_battery_level(uint8_t level) {
-    if (level > 100) level = 100;
+    if (level > 100)
+    {
+        level = 100;
+    }
 
     if (level == last_battery_level) {
         return 0;
@@ -537,6 +554,17 @@ int BleService::update_battery_level(uint8_t level) {
     last_battery_level = level;
 
     if (current_state != BleServiceState::Connected || !current_conn) {
+        LOG_DBG("Battery level updated: %u%%, but not connected", level);
+        return -ENOTCONN;
+    }
+
+    //if (!mtu_negotiated) {
+    //    LOG_DBG("Battery level updated: %u%%, but MTU not yet negotiated, skipping", level);
+    //    return -ENOTCONN;
+    //}
+
+    if (!battery_notify_enable) {
+        LOG_DBG("Battery level updated: %u%%, but central hasn't yet subscribed to notifications, skipping", level);
         return -ENOTCONN;
     }
 
@@ -595,27 +623,21 @@ void BleService::on_adv_timeout(struct k_work *work) {
 }
 
 void BleService::restart_advertising() {
+    if (current_state == BleServiceState::Connected) {
+        return;
+    }
     bt_le_adv_stop();
     int ret;
     if (current_state == BleServiceState::AdvertisingDiscoverable || current_state == BleServiceState::ConnectedAdvertising) {
         LOG_DBG("Restarting discoverable adverising");
-        struct bt_le_adv_param adv_param = *BT_LE_ADV_CONN_FAST_1;
-        adv_param.id = current_bt_id;
-        ret = bt_le_adv_start(&adv_param, ad_discoverable, ARRAY_SIZE(ad_discoverable), sd, ARRAY_SIZE(sd));
+        ret = bt_le_adv_start(&adv_param_discoverable, ad_discoverable, ARRAY_SIZE(ad_discoverable), sd_discoverable, ARRAY_SIZE(sd_discoverable));
         if (ret)
         {
             LOG_ERR("Failed to restart discoverable advertising, err %d", ret);
         }
     } else if (current_state == BleServiceState::AdvertisingUndiscoverable) {
         LOG_DBG("Restarting undiscoverable adverising");
-        struct bt_le_adv_param adv_param = BT_LE_ADV_PARAM_INIT(
-            BT_LE_ADV_OPT_CONN | BT_LE_ADV_OPT_FILTER_CONN | BT_LE_ADV_OPT_FILTER_SCAN_REQ,
-            BT_GAP_ADV_FAST_INT_MIN_1,
-            BT_GAP_ADV_FAST_INT_MAX_1,
-            NULL
-        );
-        adv_param.id = current_bt_id;
-        ret = bt_le_adv_start(&adv_param, ad_undiscoverable, ARRAY_SIZE(ad_undiscoverable), nullptr, 0);
+        ret = bt_le_adv_start(&adv_param_undiscoverable, ad_undiscoverable, ARRAY_SIZE(ad_undiscoverable), nullptr, 0);
         if (ret)
         {
             LOG_ERR("Failed to restart undiscoverable advertising, err %d", ret);

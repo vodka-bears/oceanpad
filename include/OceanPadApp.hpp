@@ -32,12 +32,7 @@ private:
 
     const ReportCodecOceanPad* current_codec = nullptr;
 
-    static const ReportCodecXbox xbox_codec;
-    static const ReportCodec8BitDo abitdo_codec;
-
     static BleService ble_service;
-
-    bool xd_switch_was_on{ false };
 
     int64_t system_press_start = 0;
     int64_t home_press_start = 0;
@@ -56,6 +51,7 @@ private:
     static inline const int32_t BATTERY_UPDATE_PERIOD_MS = 30'000;
     static inline const int64_t IDLE_TIMEOUT_MS = 900'000;
     static inline const uint16_t AXIS_ACTIVITY_THRESHOLD = 2048;
+    static inline const uint16_t SYSTEM_LOOP_PERIOD_MS = 250;
 
     struct k_thread input_thread_data;
     struct k_thread system_thread_data;

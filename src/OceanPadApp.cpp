@@ -3,12 +3,9 @@
 #include <zephyr/sys/reboot.h>
 #include <zephyr/settings/settings.h>
 
-LOG_MODULE_REGISTER(oceanpad_app, LOG_LEVEL_DBG);
+LOG_MODULE_REGISTER(OceanPadApp, LOG_LEVEL_DBG);
 
-const ReportCodecXbox OceanPadApp::xbox_codec;
-const ReportCodec8BitDo OceanPadApp::abitdo_codec;
 BleService OceanPadApp::ble_service;
-
 
 void OceanPadApp::run() {
     int err = 0;
@@ -54,6 +51,8 @@ void OceanPadApp::run() {
         LOG_ERR("Set identity failed (err %d)", err);
         k_sleep(K_FOREVER);
     }
+
+    next_battery_update_time = k_uptime_get();
 
     start_advertising();
 
@@ -113,10 +112,12 @@ void OceanPadApp::input_loop() {
 }
 
 void OceanPadApp::system_loop() {
-    hw.get_state(gamepad_state);
     handle_system_logic();
+}
+
+void OceanPadApp::handle_system_logic() {
     int64_t current_time = k_uptime_get();
-    if (ble_service.get_state() >= BleServiceState::Connected && current_time > next_battery_update_time)
+    if (current_time > next_battery_update_time)
     {
         ble_service.update_battery_level(hw.get_battery_percent());
         next_battery_update_time = current_time + BATTERY_UPDATE_PERIOD_MS;
@@ -132,13 +133,11 @@ void OceanPadApp::system_loop() {
         LOG_DBG("Identity switched, restarting");
         hw.restart();
     }
-}
-
-void OceanPadApp::handle_system_logic() {
+    hw.get_state(gamepad_state);
     if (gamepad_state.buttons.mode) {
         if (system_press_start == 0) {
-            system_press_start = k_uptime_get();
-        } else if (system_press_start > 0 && (k_uptime_get() - system_press_start >= LONG_PRESS_TIMEOUT_MS)) {
+            system_press_start = current_time;
+        } else if (system_press_start > 0 && (current_time - system_press_start >= LONG_PRESS_TIMEOUT_MS)) {
             if (gamepad_state.buttons.b) {
                 LOG_DBG("Mode+B: Axes calibration");
                 hw.start_calibration(0);
@@ -161,7 +160,7 @@ void OceanPadApp::handle_system_logic() {
                     ble_service.stop_advertising();
                     if (ble_service.get_state() == BleServiceState::AdvertisingUndiscoverable)
                     {
-                        hw.set_led(LedPattern::AdvertisingDiscoverable);
+                        hw.set_led(LedPattern::AdvertisingUndiscoverable);
                     }
                     else if (ble_service.get_state() == BleServiceState::Connected)
                     {
@@ -181,8 +180,8 @@ void OceanPadApp::handle_system_logic() {
 
     if (gamepad_state.buttons.home) {
         if (home_press_start == 0) {
-            home_press_start = k_uptime_get();
-        } else if (home_press_start > 0 && (k_uptime_get() - home_press_start >= LONG_PRESS_TIMEOUT_MS)) {
+            home_press_start = current_time;
+        } else if (home_press_start > 0 && (current_time - home_press_start >= LONG_PRESS_TIMEOUT_MS)) {
             LOG_DBG("HOME Long Press: System OFF");
             ble_service.do_disconnect();
             hw.sleep();
@@ -285,6 +284,7 @@ void OceanPadApp::OceanPadHidCallbacks::on_connected() const {
         return;
     }
     app_ptr->hw.set_led(LedPattern::Connected);
+    app_ptr->next_battery_update_time = k_uptime_get() + 500;
 }
 
 void OceanPadApp::OceanPadHidCallbacks::on_disconnected(bool graceful) const {

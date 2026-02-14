@@ -53,6 +53,7 @@ public:
     // BAS Callbacks
     static ssize_t read_battery_level_cb(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                                           void *buf, uint16_t len, uint16_t offset);
+    static void battery_ccc_cfg_changed(const struct bt_gatt_attr *attr, uint16_t value);
     // DIS Callbacks
     static ssize_t read_dis_pnp_id(struct bt_conn *conn, const struct bt_gatt_attr *attr,
                                    void *buf, uint16_t len, uint16_t offset);
@@ -107,8 +108,35 @@ private:
     uint16_t current_report_map_size;
 
     uint16_t appearance;
-    struct bt_data ad_discoverable[3];
-    struct bt_data sd[1];
+    static inline const uint8_t uuids[] = {
+        BT_UUID_16_ENCODE(BT_UUID_HIDS_VAL),
+        BT_UUID_16_ENCODE(BT_UUID_DIS_VAL),
+        BT_UUID_16_ENCODE(BT_UUID_BAS_VAL)
+    };
+    struct bt_data ad_discoverable[3] = {
+        BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR),
+        BT_DATA(BT_DATA_UUID16_ALL, uuids, sizeof(uuids)),
+        BT_DATA(0, 0, 0), //to be filled in the code
+    };
+    struct bt_data sd_discoverable[1]= {
+        BT_DATA(0, 0, 0), //to be filled in the code
+    };
+    static inline const struct bt_data ad_undiscoverable[1] = {
+        BT_DATA_BYTES(BT_DATA_FLAGS, BT_LE_AD_NO_BREDR),
+    };
+
+    struct bt_le_adv_param adv_param_discoverable  = BT_LE_ADV_PARAM_INIT(
+        BT_LE_ADV_OPT_CONN | BT_LE_ADV_OPT_USE_IDENTITY,
+        BT_GAP_ADV_FAST_INT_MIN_1,
+        BT_GAP_ADV_FAST_INT_MAX_1,
+        nullptr
+    );
+    struct bt_le_adv_param adv_param_undiscoverable = BT_LE_ADV_PARAM_INIT(
+        BT_LE_ADV_OPT_CONN | BT_LE_ADV_OPT_USE_IDENTITY | BT_LE_ADV_OPT_FILTER_CONN | BT_LE_ADV_OPT_FILTER_SCAN_REQ,
+        BT_GAP_ADV_FAST_INT_MIN_1,
+        BT_GAP_ADV_FAST_INT_MAX_1,
+        nullptr
+    );
 
     BleServiceState current_state;
     struct bt_conn *current_conn;
@@ -121,6 +149,9 @@ private:
     uint16_t input_report_cache_len;
 
     const HidServiceCallbacks* hid_callbacks{ nullptr };
+
+    bool mtu_negotiated{ false };
+    bool battery_notify_enable{ false };
 
     static inline const uint16_t ADV_TIMEOUT_S = 60;
 };
