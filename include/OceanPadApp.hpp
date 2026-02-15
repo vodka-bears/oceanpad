@@ -37,7 +37,7 @@ private:
     struct k_thread input_thread_data;
     struct k_thread system_thread_data;
     K_KERNEL_STACK_MEMBER(input_stack, 1024);
-    K_KERNEL_STACK_MEMBER(system_stack, 2048);
+    K_KERNEL_STACK_MEMBER(system_stack, 1024);
 
     class OceanPadHidCallbacks : public HidServiceCallbacks {
     public:
