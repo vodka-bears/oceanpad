@@ -60,15 +60,19 @@ void SystemProcessor::process_system_logic(const GamepadState& gamepad_state) {
             } else if (!gamepad_state.buttons.b && !gamepad_state.buttons.y && !gamepad_state.buttons.x) {
                 BleServiceState ble_state = ble_service->get_state();
                 if (ble_state == BleServiceState::AdvertisingDiscoverable || ble_state == BleServiceState::ConnectedAdvertising) {
-                    LOG_DBG("Mode Long Press: Stop advertsing discoverable");
-                    ble_service->stop_advertising();
-                    if (ble_service->get_state() == BleServiceState::AdvertisingUndiscoverable)
-                    {
-                        hardware_manager->set_led(LedPattern::AdvertisingUndiscoverable);
-                    }
-                    else if (ble_service->get_state() == BleServiceState::Connected)
-                    {
-                        hardware_manager->set_led(LedPattern::Connected);
+                    if (!ble_service->has_bonded_peer()) {
+                        LOG_DBG("Mode Long Press: Advertising discoverable but no bonded peer, can't advertise undiscoverable, skipping");
+                    } else {
+                        LOG_DBG("Mode Long Press: Stop advertsing discoverable");
+                        ble_service->stop_advertising();
+                        if (ble_service->get_state() == BleServiceState::AdvertisingUndiscoverable)
+                        {
+                            hardware_manager->set_led(LedPattern::AdvertisingUndiscoverable);
+                        }
+                        else if (ble_service->get_state() == BleServiceState::Connected)
+                        {
+                            hardware_manager->set_led(LedPattern::Connected);
+                        }
                     }
                 } else {
                     LOG_DBG("Mode Long Press: Advertsing discoverable");
