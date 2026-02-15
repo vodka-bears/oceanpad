@@ -5,18 +5,17 @@
 
 LOG_MODULE_REGISTER(ReportCodecXbox, LOG_LEVEL_WRN);
 
-uint8_t ReportCodecXbox::encode_input(uint8_t report_id, const GamepadState& data, uint8_t* report_buffer, uint16_t report_len) const {
-    if (report_id != 1) {
-        LOG_WRN("Only report id 1 is supported but %d is requested, ignoring", report_id);
-        return 0;
-    }
-    if (report_len < 16)
-    {
-        LOG_WRN("Buffer size of at least 16 is required but %d is provided, ignoring", report_len);
-        return 0;
-    }
-    auto* report = reinterpret_cast<InputReportXbox*>(report_buffer);
+int ReportCodecXbox::encode_input(uint8_t& report_id, const GamepadState& data, uint8_t* report_buffer, uint16_t buffer_len) const {
 
+    if (buffer_len < 16)
+    {
+        LOG_WRN("Buffer size of at least 16 is required but %d is provided, ignoring", buffer_len);
+        return -ENOMEM;
+    }
+
+    report_id = 1;
+
+    auto* report = reinterpret_cast<InputReportXbox*>(report_buffer);
     memset(report, 0, sizeof(InputReportXbox));
 
     auto conv_stick = [](int32_t stick_in) -> uint16_t {
@@ -51,14 +50,14 @@ uint8_t ReportCodecXbox::encode_input(uint8_t report_id, const GamepadState& dat
     return sizeof(InputReportXbox);
 }
 
-uint8_t ReportCodecXbox::decode_output(uint8_t report_id, VibrationDataXbox& data, const uint8_t* report_buffer, uint16_t report_len) const {
+int ReportCodecXbox::decode_output(uint8_t report_id, VibrationDataXbox& data, const uint8_t* report_buffer, uint16_t report_len) const {
     if (report_id != 3) {
         LOG_WRN("Only report id 3 is supported but %d is requested, ignoring", report_id);
-        return 0;
+        return -ENOTSUP;
     }
     if (report_len != 8) {
         LOG_WRN("Output report id 3 must be 8 bytes long but %d is provided, ignoring", report_len);
-        return 0;
+        return -EBADMSG;
     }
     auto* report = reinterpret_cast<const VibrationDataXbox*>(report_buffer);
     data = *report;

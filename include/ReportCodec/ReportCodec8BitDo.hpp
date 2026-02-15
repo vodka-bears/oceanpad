@@ -4,8 +4,8 @@
 
 class ReportCodec8BitDo : public ReportCodec<GamepadState, VibrationDataXbox> {
 public:
-    virtual uint8_t encode_input(uint8_t report_id, const GamepadState& data, uint8_t* report_buffer, uint16_t report_len) const override;
-    virtual uint8_t decode_output(uint8_t report_id, VibrationDataXbox& data, const uint8_t* report_buffer, uint16_t report_len) const override;
+    virtual int encode_input(uint8_t& report_id, const GamepadState& data, uint8_t* report_buffer, uint16_t buffer_len) const override;
+    virtual int decode_output(uint8_t report_id, VibrationDataXbox& data, const uint8_t* report_buffer, uint16_t report_len) const override;
 };
 
 struct __packed InputReport8BitDo {

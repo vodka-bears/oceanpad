@@ -6,18 +6,16 @@
 
 LOG_MODULE_REGISTER(ReportCodec8BitDo, LOG_LEVEL_WRN);
 
-uint8_t ReportCodec8BitDo::encode_input(uint8_t report_id, const GamepadState& data, uint8_t* report_buffer, uint16_t report_len) const {
-    if (report_id != 1) {
-        LOG_WRN("Only report id 1 is supported but %d is requested, ignoring", report_id);
-        return 0;
-    }
-    if (report_len < 33)
+int ReportCodec8BitDo::encode_input(uint8_t& report_id, const GamepadState& data, uint8_t* report_buffer, uint16_t buffer_len) const {
+    if (buffer_len < 33)
     {
-        LOG_WRN("Buffer size of at least 33 is required but %d is provided, ignoring", report_len);
-        return 0;
+        LOG_WRN("Buffer size of at least 33 is required but %d is provided, ignoring", buffer_len);
+        return -ENOMEM;
     }
-    auto* report = reinterpret_cast<InputReport8BitDo*>(report_buffer);
 
+    report_id = 1;
+
+    auto* report = reinterpret_cast<InputReport8BitDo*>(report_buffer);
     memset(report, 0, sizeof(InputReport8BitDo));
 
     report->dpad = data.dpad == DPadState::Centered ? 0xF : static_cast<uint8_t>(data.dpad);
@@ -34,8 +32,6 @@ uint8_t ReportCodec8BitDo::encode_input(uint8_t report_id, const GamepadState& d
 
     report->lt = (uint8_t)(data.axes.trigger_lt >> 8);
     report->rt = (uint8_t)(data.axes.trigger_rt >> 8);
-
-
 
     report->a = data.buttons.a;
     report->b = data.buttons.b;
@@ -68,14 +64,14 @@ uint8_t ReportCodec8BitDo::encode_input(uint8_t report_id, const GamepadState& d
     return sizeof(InputReport8BitDo);
 }
 
-uint8_t ReportCodec8BitDo::decode_output(uint8_t report_id, VibrationDataXbox& data, const uint8_t* report_buffer, uint16_t report_len) const {
+int ReportCodec8BitDo::decode_output(uint8_t report_id, VibrationDataXbox& data, const uint8_t* report_buffer, uint16_t report_len) const {
     if (report_id != 5) {
         LOG_WRN("Only report id 5 is supported but %d is requested, ignoring", report_id);
-        return 0;
+        return -ENOTSUP;
     }
     if (report_len != 4) {
         LOG_WRN("Output report id 5 must be 4 bytes long but %d is provided, ignoring", report_len);
-        return 0;
+        return -EBADMSG;
     }
     auto* report = reinterpret_cast<const OutputReport8BitDo*>(report_buffer);
     data.enable_right_motor = 1;
@@ -91,4 +87,3 @@ uint8_t ReportCodec8BitDo::decode_output(uint8_t report_id, VibrationDataXbox& d
     data.loop_count = 0xFF;
     return sizeof(OutputReport8BitDo);;
 }
-
