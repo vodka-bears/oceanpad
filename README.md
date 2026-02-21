@@ -15,7 +15,7 @@ The firmware is written in C++ targeting the Zephyr RTOS. I am currently working
 ## Known limitations
 * **BLE Privacy/IRK:** If the host computer uses BLE Privacy with Identity Resolving Keys (IRK), the controller cannot maintain active pairings for both modes (X and D) simultaneously. If paired in one mode the bond in another mode will be erased. This is a [documented limitation](https://github.com/zephyrproject-rtos/zephyr/pull/49634) within the current Zephyr stack. I am investigating a workaround to handle dual-identity pairing more gracefully.
 ## Hardware building
-### Voard acquisition
+### Board acquisition
 I designed the board using EasyEDA. That's the last project I used this service for since I'm switching to KiCad. In the `doc` directory, you'll find the Gerber, BOM, and placement files to order production from any PCB fabrication site.
 * **Note:** I have 4 spare boards left without the module soldered. If you're ever in **Belgrade** and want one, feel free to DM me.
 ### Modifying the controller
