@@ -1,6 +1,6 @@
 # OceanPad
 **OceanPad** is a hardware modification project for the Logitech F710 gamepad. The original controller uses a "sandwich" PCB architecture featuring an nRF24LE1 MCU/transceiver. This project replaces that board entirely, transforming the classic F710 into a modern, low-latency **Bluetooth Low Energy (BLE)** gamepad with integrated motion controls.
-//Picture temporary placeholder//
+![Board pic](doc/sandwich.jpg)![Board layout front](doc/PCB_PCB-NRF-ECO-WAY_2026-02-21.png)
 ## Modes of operaton
 The original F710 features a physical D ⇔ X toggle switch, originally used to swap between DirectInput and XInput. In this project, the switch is repurposed to toggle between two distinct BLE HID modes:
 * **X Position:** The controller impersonates an Xbox Series Controller.
