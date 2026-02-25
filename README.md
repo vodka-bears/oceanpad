@@ -76,7 +76,7 @@ To compile the firmware for the OceanPad board:
 west build -b oceanpad -- -DBOARD_ROOT=$PWD
 ```
 ### Flashing
-You'll need a CMSIS-DAP adapter with a Vref pin since the F710 uses 2V for logic. ***If you use 3.3V logic level you might fry the module.** I used a cheap pink Chinese CherryDAP from AliExpress. Solder GND, Vref, SWDIO, SWCLK, and Reset to the board, power it, and run:
+You'll need a CMSIS-DAP adapter with a Vref pin since the F710 uses 2V for logic. ***If you use 3.3V logic level you might fry the module.*** I used a cheap pink Chinese CherryDAP from AliExpress. Solder GND, Vref, SWDIO, SWCLK, and Reset to the board, power it, and run:
 ```
 west flash
 ```
