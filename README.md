@@ -5,7 +5,7 @@
 The original F710 features a physical D ⇔ X toggle switch, originally used to swap between DirectInput and XInput. In this project, the switch is repurposed to toggle between two distinct BLE HID modes:
 * **X Position:** The controller impersonates an Xbox Series Controller.
 * **D Position:** The controller mimics an 8BitDo Ultimate 2 Wireless. This controller is specifically chosen because it is the only BLE controller with native motion controls support recognized by Steam Input.
-## hardware
+## Hardware
 The board integrates the following key components:
 * [Raytac MDBT42Q-512KV2 module](https://www.raytac.com/product/ins.php?index_id=31). A high-performance module powered by the **Nordic nRF52832** (ARM Cortex-M4F).
 * [TDK InvenSence ICM-42688-PC](https://invensense.tdk.com/products/motion-tracking/6-axis/icm-42688-p/). A high-precision 6-axis MEMS IMU enabling gyro aiming and motion gestures.
