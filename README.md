@@ -20,9 +20,9 @@ The controller generally acts like Xbox Series Controller.
 * **Power On**: Press the **HOME** button (central Logitech button). The controller will power up and attempt to auto-reconnect to the last paired host.
 * **Power Off**: Hold the **HOME** button for 3 seconds.
 * **Pairing Mode**: Hold the **MODE** button until the LED blinks rapidly.
- * In **X** mode, it appears as _Xbox Wireless Controller_.
- * In **D** mode, it appears as _OceanPad_ (mimicking 8BitDo Ultimate 2 Wireless).
- * If no pairing information exists, the controller enters pairing mode automatically upon power-up.
+    * If no pairing information exists, the controller enters pairing mode automatically upon power-up.
+    * In **X** mode, it appears as _Xbox Wireless Controller_.
+    * In **D** mode, it appears as _OceanPad_ (mimicking 8BitDo Ultimate 2 Wireless).
 ### LED Status Indicators
 * **Rapid Blinking**: Pairing mode active.
 * **Double Flash:** Waiting for a previously paired host to reconnect.
