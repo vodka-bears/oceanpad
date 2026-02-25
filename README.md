@@ -53,7 +53,7 @@ I designed the board using EasyEDA. That's the last project I used this service 
 2. **Desoldering:** Unsolder the motor (black/white) and bumper (white) wires. Unscrew the two white screws and remove the motherboard. Unscrew the left trigger assembly and unsolder it from the original board.
 3. **Sandwich Removal:** Use a hot air gun and flux to carefully heat the original sandwich PCB edges and remove it.
 4. **Soldering the Mod:** Solder the OceanPad board in place.
-* **Correction:** I initially thought the pin pitch was 1.27mm, but it is actually 1.25mm. They are slightly misaligned but functional.
+    * **Correction:** I initially thought the pin pitch was 1.27mm, but it is actually 1.25mm. They are slightly misaligned but functional.
 5. **Debug Wiring:** Solder GND, Vref, SWDIO, SWCLK, and Reset to the board (add TX/RX if you need serial logs while playing with the firmware).
 6. **Reassembly:** After flashing, unsolder the debug wires and reassemble in reverse order.
 ## Building and flashing
@@ -76,7 +76,7 @@ To compile the firmware for the OceanPad board:
 west build -b oceanpad -- -DBOARD_ROOT=$PWD
 ```
 ### Flashing
-You'll need a CMSIS-DAP adapter with a Vref pin since the F710 uses 2V for logic. I used a cheap pink Chinese CherryDAP from AliExpress. Solder GND, Vref, SWDIO, SWCLK, and Reset to the board, power it, and run:
+You'll need a CMSIS-DAP adapter with a Vref pin since the F710 uses 2V for logic. ***If you use 3.3V logic level you might fry the module.** I used a cheap pink Chinese CherryDAP from AliExpress. Solder GND, Vref, SWDIO, SWCLK, and Reset to the board, power it, and run:
 ```
 west flash
 ```
