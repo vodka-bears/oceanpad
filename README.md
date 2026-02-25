@@ -14,6 +14,36 @@ The board integrates the following key components:
 The firmware is written in C++ targeting the Zephyr RTOS. I am currently working on extracting the HID logic into a standalone library to simplify the creation of custom HID devices for the community.
 ## Known limitations
 * **BLE Privacy/IRK:** If the host computer uses BLE Privacy with Identity Resolving Keys (IRK), the controller cannot maintain active pairings for both modes (X and D) simultaneously. If paired in one mode the bond in another mode will be erased. This is a [documented limitation](https://github.com/zephyrproject-rtos/zephyr/pull/49634) within the current Zephyr stack. I am investigating a workaround to handle dual-identity pairing more gracefully.
+## Using the controller
+### Power and Connectivity
+The controller generally acts like Xbox Series Controller.
+* **Power On**: Press the **HOME** button (central Logitech button). The controller will power up and attempt to auto-reconnect to the last paired host.
+* **Power Off**: Hold the **HOME** button for 3 seconds.
+* **Pairing Mode**: Hold the **MODE** button until the LED blinks rapidly.
+ * In **X** mode, it appears as _Xbox Wireless Controller_.
+ * In **D** mode, it appears as _OceanPad_ (mimicking 8BitDo Ultimate 2 Wireless).
+ * If no pairing information exists, the controller enters pairing mode automatically upon power-up.
+### LED Status Indicators
+* **Rapid Blinking**: Pairing mode active.
+* **Double Flash:** Waiting for a previously paired host to reconnect.
+* **Solid Light**: Connected and active.
+* **Triple Flash**: Axes calibration in process.
+* **Single Flash (Ramping Up)**: Gyro recalibration in process.
+### Special Functions & Maintenance
+* Hold **MODE + B**: _Axes calibration._ Enters calibration mode (see below).
+* Hold **MODE + Y**: _Clear paired host._ Erases the bonded host for the current mode (**X** or **D**).
+* Hold **HOME + X**: _Recalibrate gyro._ (D-Mode only) Gyro is calibrated automatically on startup. If it's off it's possible to recalibrate it when powered. Place the controller on a flat, stable surface. The LED will flash during the process and return to solid when finished.
+### Stick & Trigger Calibration Procedure
+If you notice drifting or truncated input ranges, perform a manual calibration:
+1. Hold MODE + B for 3 seconds until the LED flashes in series of three.
+2. The current position of the sticks and triggers is now set as the Deadzone/Zero point.
+3. Slowly rotate both analog sticks to their full extent and depress both triggers fully.
+4. To Save: Press **HOME**.
+5. To Cancel: Press **BACK** to exit without saving changes.
+### VIBRATION button
+The original **VIBRATION** button is repurposed:
+* **X** Mode: Mapped to the Share/Capture button.
+* **D** Mode: Mapped to PR (the Right Back Paddle of original 8BitDo Ultimate 2 Wireless).
 ## Hardware building
 ### Board acquisition
 I designed the board using EasyEDA. That's the last project I used this service for since I'm switching to KiCad. In the `doc` directory, you'll find the Gerber, BOM, and placement files to order production from any PCB fabrication site.
