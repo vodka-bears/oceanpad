@@ -94,7 +94,7 @@ int HardwareManager::update() {
     input_processor.process_raw_data(new_state, raw_data);
     new_state.battery_percent = battery_gauge.get_battery_percent();
     if (new_state.battery_percent == 0) {
-        uint8_t vbat = battery_gauge.get_vbat_mv_last();
+        uint16_t vbat = battery_gauge.get_vbat_mv_last();
         if (vbat < MIN_VOLTAGE) {
             LOG_WRN("Reached terminal voltage %d, going to sleep", vbat);
             sleep();

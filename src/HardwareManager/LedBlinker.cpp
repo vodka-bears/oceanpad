@@ -63,12 +63,11 @@ void LedBlinker::apply_brightness(uint8_t value) {
         pwm_set_pulse_dt(&led_pwm, 0);
         return;
     }
-    const uint16_t numerator = (VOLTAGE_MAX - VOLTAGE_MIN);
-    const uint16_t denominator = (vbat - VOLTAGE_MIN);
-    //const uint16_t numerator = 1;
-    //const uint16_t denominator = 1;
-    const uint64_t intermediate = (uint64_t)led_pwm.period * brightness_lut[value] * numerator;
-    uint32_t pulse = (uint32_t)(intermediate / denominator / 255);
+    //const uint16_t numerator = (VOLTAGE_MAX - VOLTAGE_MIN);
+    //const uint16_t denominator = (vbat - VOLTAGE_MIN);
+    //const uint64_t intermediate = (uint64_t)led_pwm.period * brightness_lut[value] * numerator;
+    //uint32_t pulse = (uint32_t)(intermediate / denominator / 255);
+    uint32_t pulse = (uint32_t)((uint64_t)led_pwm.period * brightness_lut[value] * VOLTAGE_MAX / vbat / 255);
     LOG_DBG("Voltage: %4d, pulse: %5d", vbat, pulse);
     if (pulse > led_pwm.period) {
         pulse = led_pwm.period;
@@ -229,7 +228,7 @@ uint8_t LedBlinker::calculate_fading(uint32_t elapsed, uint32_t duration, bool r
     if (duration == 0) return rising ? current_params.max_brightness : current_params.min_brightness;
 
     int32_t diff = current_params.max_brightness - current_params.min_brightness;
-    uint32_t progress = (elapsed * diff) / duration;
+    uint32_t progress = ((uint64_t)elapsed * diff) / duration;
 
     if (rising) {
         return (uint8_t)MIN(current_params.min_brightness + progress, current_params.max_brightness);
